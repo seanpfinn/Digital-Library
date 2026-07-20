@@ -94,7 +94,8 @@ body {
   outline: none;
 }
 .search input::placeholder { color: #b1b1b1; }
-.search input:focus { border-color: rgba(0, 75, 236, 0.35); text-align: left; }
+/* Stays centred while typing, so the query grows outward from the middle. */
+.search input:focus { border-color: rgba(0, 75, 236, 0.35); }
 .search input::-webkit-search-cancel-button { cursor: pointer; }
 
 /* Nav row */

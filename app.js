@@ -34,8 +34,10 @@ function saveCustomBooks() {
 }
 
 let books = [...DEFAULT_BOOKS, ...loadCustomBooks()];
-let selectedIndex = books.findIndex((b) => b.id === 'inspired');
-if (selectedIndex < 0) selectedIndex = 0;
+
+/* Position along the shelf. It counts slots, not books, and is deliberately
+   unbounded — the book on screen is slotCursor modulo books.length. */
+let slotCursor = Math.max(0, books.findIndex((b) => b.id === 'inspired'));
 
 /* ============================== Cover Flow ============================== */
 
@@ -52,12 +54,66 @@ function coverSrc(book) {
   return book.cover.startsWith('data:') ? book.cover : `${book.cover}?v=${COVER_VERSION}`;
 }
 
+/* How many slots the shelf renders. Always a whole number of copies of the
+   library, so every slot maps cleanly onto a book. */
+let slotCount = 0;
+
+function currentBookIndex() {
+  const n = books.length;
+  return ((slotCursor % n) + n) % n;
+}
+
+/* Spacing, plus the first offset that sits entirely past the edge of the
+   screen — that is where covers can be recycled unseen. */
+function shelfMetrics() {
+  const isNarrow = window.innerWidth < 900;
+
+  // Measured from a rendered cover rather than the --cover-w custom property:
+  // getPropertyValue hands back the unresolved token string, which no longer
+  // parses now that the width is a min()/calc() expression.
+  let probe = coverflowEl.querySelector('.book');
+  const temporary = !probe;
+  if (temporary) {
+    probe = document.createElement('div');
+    probe.className = 'book';
+    probe.style.visibility = 'hidden';
+    coverflowEl.appendChild(probe);
+  }
+  const coverW = probe.offsetWidth || 255;
+  if (temporary) probe.remove();
+
+  const firstOffset = coverW * (isNarrow ? 0.68 : 0.95);
+  const step = coverW * (isNarrow ? 0.28 : 0.335);
+
+  const edge = window.innerWidth / 2 + coverW / 2;
+  let offscreen = 1;
+  while (firstOffset + (offscreen - 1) * step <= edge && offscreen < 60) offscreen++;
+
+  return { coverW, firstOffset, step, offscreen };
+}
+
+/* Shortest signed distance around the shelf. */
+function wrapOffset(d) {
+  const t = slotCount;
+  let o = ((d % t) + t) % t;
+  if (o > t / 2) o -= t;
+  return o;
+}
+
 function buildCoverflow() {
+  const n = books.length;
+  const { offscreen } = shelfMetrics();
+  // Enough whole copies of the library to fill the screen and still leave
+  // hidden slots either side for recycling.
+  const copies = Math.max(1, Math.ceil((2 * offscreen + 1) / n));
+  slotCount = n * copies;
+
   coverflowEl.innerHTML = '';
-  books.forEach((book, i) => {
+  for (let slot = 0; slot < slotCount; slot++) {
+    const book = books[slot % n];
     const el = document.createElement('div');
     el.className = 'book';
-    el.dataset.index = i;
+    el.dataset.slot = slot;
 
     const src = coverSrc(book);
 
@@ -76,52 +132,25 @@ function buildCoverflow() {
 
     el.appendChild(cover);
     el.appendChild(reflection);
-    el.addEventListener('click', () => {
-      if (i !== selectedIndex) select(i);
-    });
+    el.addEventListener('click', () => goToSlot(slot));
     coverflowEl.appendChild(el);
-  });
+  }
   layout();
 }
 
 function layout() {
-  const isNarrow = window.innerWidth < 900;
-  // Measured from a rendered cover rather than the --cover-w custom property:
-  // getPropertyValue hands back the unresolved token string, which no longer
-  // parses now that the width is a min()/calc() expression.
-  const firstBook = coverflowEl.querySelector('.book');
-  const coverW = firstBook ? firstBook.offsetWidth : 255;
-  const firstOffset = coverW * (isNarrow ? 0.68 : 0.95); // centre to first side cover
-  let step = coverW * (isNarrow ? 0.28 : 0.335);         // gap between stacked side covers
-
-  // Guarantee the shelf runs off both edges: on a wide screen the proportional
-  // spacing alone can stop short, so widen the step until the outermost cover
-  // clears the viewport.
-  const outermost = Math.floor(books.length / 2);
-  if (outermost > 1) {
-    const needed = window.innerWidth / 2 + coverW * 0.35;
-    const reach = firstOffset + (outermost - 1) * step + coverW / 2;
-    if (reach < needed) {
-      step = (needed - firstOffset - coverW / 2) / (outermost - 1);
-    }
-  }
-
+  const { firstOffset, step, offscreen } = shelfMetrics();
   const sideAngle = 42;
 
-  const n = books.length;
   coverflowEl.querySelectorAll('.book').forEach((el) => {
-    const i = Number(el.dataset.index);
-    // Shortest wrapped distance so the shelf loops continuously
-    let offset = i - selectedIndex;
-    if (offset > n / 2) offset -= n;
-    else if (offset < -n / 2) offset += n;
+    const offset = wrapOffset(Number(el.dataset.slot) - slotCursor);
     const abs = Math.abs(offset);
     const dir = Math.sign(offset);
 
-    // A book jumping from one end of the shelf to the other on wrap
-    // shouldn't slide across the middle — snap it instead.
+    // A cover recycling from one end of the shelf to the other must not slide
+    // across the middle — snap it. This only ever happens off-screen.
     const prev = el.dataset.off;
-    if (prev !== undefined && Math.abs(offset - Number(prev)) > n / 2) {
+    if (prev !== undefined && Math.abs(offset - Number(prev)) > slotCount / 2) {
       el.style.transition = 'none';
       requestAnimationFrame(() => { el.style.transition = ''; });
     }
@@ -129,27 +158,44 @@ function layout() {
 
     if (offset === 0) {
       el.style.transform = 'translateX(0) translateZ(160px) rotateY(0deg)';
-      el.style.opacity = '1';
       el.style.zIndex = 100;
+      el.style.pointerEvents = 'auto';
     } else {
       const x = dir * (firstOffset + (abs - 1) * step);
       el.style.transform =
         `translateX(${x}px) translateZ(-60px) rotateY(${-dir * sideAngle}deg) scaleY(0.97)`;
-      el.style.opacity = abs > 6 ? '0' : '1';
       el.style.zIndex = 100 - abs;
-      el.style.pointerEvents = abs > 6 ? 'none' : 'auto';
+      el.style.pointerEvents = abs > offscreen ? 'none' : 'auto';
     }
   });
 
-  const book = books[selectedIndex];
+  const book = books[currentBookIndex()];
   bookTitleEl.textContent = book.title;
   bookAuthorEl.textContent = book.author;
 }
 
-function select(i) {
-  const n = books.length;
-  selectedIndex = ((i % n) + n) % n;
+function setCursor(c) {
+  slotCursor = c;
   layout();
+}
+
+/* Move by whole positions along the shelf. */
+function nudge(delta) {
+  setCursor(slotCursor + delta);
+}
+
+/* Bring a specific rendered slot to the centre, travelling the short way. */
+function goToSlot(slot) {
+  const delta = wrapOffset(slot - slotCursor);
+  if (delta !== 0) setCursor(slotCursor + delta);
+}
+
+/* Bring a specific book to the centre, travelling the short way. */
+function selectBook(bookIndex) {
+  const n = books.length;
+  let delta = (((bookIndex - currentBookIndex()) % n) + n) % n;
+  if (delta > n / 2) delta -= n;
+  setCursor(slotCursor + delta);
 }
 
 /* Keyboard */
@@ -157,8 +203,8 @@ document.addEventListener('keydown', (e) => {
   if (!modalBackdrop.hidden) return;
   if (currentView !== 'cover') return;
   if (e.target.tagName === 'INPUT') return; // don't hijack arrows while typing
-  if (e.key === 'ArrowLeft') select(selectedIndex - 1);
-  if (e.key === 'ArrowRight') select(selectedIndex + 1);
+  if (e.key === 'ArrowLeft') nudge(-1);
+  if (e.key === 'ArrowRight') nudge(1);
 });
 
 /* Wheel / trackpad */
@@ -171,7 +217,7 @@ document.getElementById('stage').addEventListener(
     if (wheelLock) return;
     wheelAccum += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     if (Math.abs(wheelAccum) > 60) {
-      select(selectedIndex + Math.sign(wheelAccum));
+      nudge(Math.sign(wheelAccum));
       wheelAccum = 0;
       wheelLock = true;
       setTimeout(() => (wheelLock = false), 250);
@@ -187,17 +233,23 @@ const stage = document.getElementById('stage');
 
 stage.addEventListener('pointerdown', (e) => {
   dragStartX = e.clientX;
-  dragStartIndex = selectedIndex;
+  dragStartIndex = slotCursor;
 });
 stage.addEventListener('pointermove', (e) => {
   if (dragStartX === null) return;
   const moved = Math.round((dragStartX - e.clientX) / 90);
-  if (moved !== 0) select(dragStartIndex + moved);
+  if (moved !== 0) setCursor(dragStartIndex + moved);
 });
 stage.addEventListener('pointerup', () => (dragStartX = null));
 stage.addEventListener('pointercancel', () => (dragStartX = null));
 
-window.addEventListener('resize', layout);
+/* A wider window needs more slots before recycling is safely out of sight. */
+window.addEventListener('resize', () => {
+  const { offscreen } = shelfMetrics();
+  const needed = books.length * Math.max(1, Math.ceil((2 * offscreen + 1) / books.length));
+  if (needed !== slotCount) buildCoverflow();
+  else layout();
+});
 
 /* ============================== Views, tabs & search ============================== */
 
@@ -245,7 +297,7 @@ function renderBrowse() {
     item.append(img, text);
     // Jump to this book in the cover flow
     item.addEventListener('click', () => {
-      select(books.indexOf(book));
+      selectBook(books.indexOf(book));
       setView('cover');
     });
     browseInner.appendChild(item);
@@ -283,7 +335,7 @@ document.getElementById('tabsNav').addEventListener('click', (e) => {
 searchInput.addEventListener('input', () => {
   if (currentView === 'cover') {
     const match = visibleBooks()[0];
-    if (match && searchInput.value.trim()) select(books.indexOf(match));
+    if (match && searchInput.value.trim()) selectBook(books.indexOf(match));
   } else {
     renderBrowse();
   }
@@ -603,7 +655,7 @@ confirmAddBtn.addEventListener('click', () => {
   });
   saveCustomBooks();
   buildCoverflow();
-  select(books.length - 1);
+  selectBook(books.length - 1);
   if (currentView !== 'cover') renderBrowse();
   closeModal();
 });
