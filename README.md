@@ -31,8 +31,12 @@ Then open <http://localhost:8734>.
   - **Scan ISBN** — point the camera at the barcode on the back of a book; the
     ISBN is detected live (Chrome/Edge; other browsers can type the ISBN) and the
     title, author, and cover art are fetched from Open Library.
-  - **Photo of cover** — snap the front cover and it becomes the book's cover
-    art; add the title/author yourself.
+  - **Photo of cover** — snap the front cover and it is *identified*: the text
+    is read on-device with Tesseract, searched against Open Library, and you
+    pick from the matches. The publisher's artwork and metadata are used, not
+    your photo. Falls back to manual entry with your photo if nothing matches.
+- **Remove a book** — open its tray and use *Remove from library* (tap twice to
+  confirm). Removing a built-in book is remembered across reloads.
   - If no camera is available, an image-upload fallback appears (it also tries
     to read a barcode from the uploaded photo).
 - Added books persist in `localStorage`.
@@ -42,8 +46,13 @@ Then open <http://localhost:8734>.
 - Cover art in `covers/` is ~1200px artwork from the iTunes Search API. If you
   replace a file in `covers/`, bump `COVER_VERSION` in [app.js](app.js) so
   browsers don't keep serving the cached copy.
-- The nav tabs (Explore / Collection / Reading List / Settings) are styled per
-  the design but only Collection has content behind it.
+- The nav tabs (Explore / Collection / List / Settings) are styled per the
+  design but only Collection has content behind it.
+- `assets/vendor/` holds Tesseract's wasm core and English data (~6.5MB). It is
+  fetched only the first time a cover needs reading, never on page load.
+- The OpenGraph tags use **relative** image paths. Most scrapers require an
+  absolute URL, so set these to the full `https://…/assets/og-image.png` when
+  you deploy.
 - Live barcode detection uses the `BarcodeDetector` API (Chromium browsers).
   Safari/Firefox fall back to manual ISBN entry, which uses the same Open
   Library lookup.
