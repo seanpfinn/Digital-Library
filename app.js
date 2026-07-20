@@ -434,7 +434,40 @@ const RETAILERS = [
   { label: 'Borrow on Open Library', url: (q) => `https://openlibrary.org/search?q=${q}` },
 ];
 
+const trayRemove = document.getElementById('trayRemove');
+const emptyShelf = document.getElementById('emptyShelf');
+let trayBook = null;
+
+/* Hide the shelf and prompt when there is nothing left to show. */
+function updateEmptyState() {
+  const empty = books.length === 0;
+  emptyShelf.hidden = !empty;
+  stageEl.hidden = empty || currentView !== 'cover';
+  if (empty) browseEl.hidden = true;
+  else if (currentView !== 'cover') browseEl.hidden = false;
+}
+
+function resetRemoveButton() {
+  trayRemove.classList.remove('confirming');
+  trayRemove.textContent = 'Remove from library';
+}
+
+trayRemove.addEventListener('click', () => {
+  if (!trayBook) return;
+  // First click arms it, second confirms.
+  if (!trayRemove.classList.contains('confirming')) {
+    trayRemove.classList.add('confirming');
+    trayRemove.textContent = 'Tap again to remove';
+    setTimeout(resetRemoveButton, 4000);
+    return;
+  }
+  removeBook(trayBook.id);
+  closeTray();
+});
+
 function openTray(book) {
+  trayBook = book;
+  resetRemoveButton();
   trayCover.src = coverSrc(book);
   trayCover.alt = `${book.title} cover`;
   trayTitle.textContent = book.title;
@@ -978,10 +1011,66 @@ function queryFromOcr(data) {
     const key = l.text.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    picked.push(l.text);
+    picked.push(l.text.slice(0, 60));
     if (picked.length === 5) break;
   }
-  return picked.join(' ').slice(0, 120);
+  return picked;
+}
+
+/* Open Library's search wants every term to match, so a single junk word from
+   OCR sinks the whole query. Loosen it in stages: the full reading first, then
+   fewer lines, and finally each line on its own — merging those results and
+   ranking by how many lines agree, since one clean line is often enough. */
+async function findMatches(phrases) {
+  const tryQuery = async (q) => {
+    try {
+      return await searchOpenLibrary(q);
+    } catch {
+      return [];
+    }
+  };
+
+  const combos = [...new Set(
+    [phrases, phrases.slice(0, 3), phrases.slice(0, 2)]
+      .map((a) => a.join(' ').trim())
+      .filter(Boolean)
+  )];
+
+  for (const q of combos) {
+    const m = await tryQuery(q);
+    if (m.length) return { matches: m.slice(0, 6), query: q };
+  }
+
+  const haystack = phrases.join(' ').toLowerCase();
+
+  /* The strongest signal that a result is right: its title is among the words
+     we actually read off the cover. Without this, junk phrases return junk
+     books that tie with the real one on hit count alone. */
+  const titleBonus = (doc) => {
+    const t = (doc.title || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!t) return 0;
+    if (haystack.includes(t)) return 6;
+    const words = t.split(' ').filter((w) => w.length > 3);
+    if (!words.length) return 0;
+    const overlap = words.filter((w) => haystack.includes(w)).length / words.length;
+    return overlap >= 0.6 ? 3 : 0;
+  };
+
+  const merged = new Map();
+  for (const phrase of phrases.slice(0, 4)) {
+    const found = await tryQuery(phrase);
+    found.slice(0, 3).forEach((doc, i) => {
+      const key = `${doc.title}|${doc.author_name?.[0] || ''}`.toLowerCase();
+      const entry = merged.get(key);
+      // Ranking higher in a result set counts for more than merely appearing.
+      const points = 3 - i;
+      if (entry) entry.score += points;
+      else merged.set(key, { doc, score: points + titleBonus(doc) });
+    });
+  }
+
+  const ranked = [...merged.values()].sort((a, b) => b.score - a.score).map((e) => e.doc);
+  return { matches: ranked.slice(0, 6), query: phrases.join(' ') };
 }
 
 async function searchOpenLibrary(query) {
@@ -1056,37 +1145,32 @@ async function identify(source, photoSrc) {
   }
 
   setStatus('Reading the cover…');
-  let query = '';
+  let phrases = [];
   try {
     const worker = await getOcrWorker();
     // blocks:true gives per-line bounding boxes, which is how type size is read
     const { data } = await worker.recognize(source, {}, { text: true, blocks: true });
-    query = queryFromOcr(data);
+    phrases = queryFromOcr(data);
   } catch (err) {
     console.warn('OCR failed:', err);
   }
 
-  if (!query) {
+  if (!phrases.length) {
     setStatus("Couldn't read any text on that cover. Add the details yourself.", true);
     showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
     return;
   }
 
-  setStatus(`Looking up “${query.slice(0, 48)}”…`);
-  try {
-    const matches = await searchOpenLibrary(query);
-    if (!matches.length) {
-      setStatus('No match found for that cover. Add the details yourself.', true);
-      showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
-      return;
-    }
-    setStatus('');
-    showCandidates(matches, photoSrc);
-  } catch (err) {
-    console.warn(err);
-    setStatus('Search is unavailable right now. Add the details yourself.', true);
+  setStatus(`Looking up “${phrases[0].slice(0, 44)}”…`);
+  const { matches } = await findMatches(phrases);
+
+  if (!matches.length) {
+    setStatus('No match found for that cover. Add the details yourself.', true);
     showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+    return;
   }
+  setStatus('');
+  showCandidates(matches, photoSrc);
 }
 
 captureBtn.addEventListener('click', async () => {
@@ -1156,6 +1240,7 @@ confirmAddBtn.addEventListener('click', () => {
   });
   saveCustomBooks();
   buildCoverflow();
+  updateEmptyState();
   selectBook(books.length - 1);
   if (currentView !== 'cover') renderBrowse();
   closeModal();
@@ -1181,3 +1266,5 @@ document.addEventListener(
 /* ============================== Init ============================== */
 
 buildCoverflow();
+updateEmptyState();
+moveTabIndicator({ animate: false });

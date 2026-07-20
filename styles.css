@@ -120,7 +120,7 @@ body {
   background: none;
   font-family: 'Geist Mono', monospace;
   font-weight: 400;
-  font-size: 24px;
+  font-size: 18px;
   color: rgba(43, 43, 43, 0.5);
   cursor: pointer;
   white-space: nowrap;
@@ -143,7 +143,7 @@ body {
   transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
               width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tab-caret { width: 24px; height: 24px; display: none; }
+.tab-caret { width: 18px; height: 18px; display: none; }
 
 /* View toggles */
 .view-ctas { display: flex; align-items: center; gap: 6px; }
@@ -850,7 +850,7 @@ body {
   border-radius: 14px;
   font-family: 'Geist Mono', monospace;
   font-weight: 400;
-  font-size: 17px;
+  font-size: 16px;
   color: #2b2b2b;
   cursor: pointer;
   white-space: nowrap;
@@ -912,3 +912,35 @@ body {
   font-size: 13px;
   color: #8d8d8d;
 }
+
+/* ---------- Remove & empty state ---------- */
+.tray-remove {
+  margin-top: 18px;
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #9a9aa2;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.tray-remove:hover { color: #c62828; }
+/* Second click confirms — destructive, and there is no undo. */
+.tray-remove.confirming { color: #c62828; }
+
+.empty-shelf {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 320px;
+  text-align: center;
+  font-family: 'Figtree', sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #8d8d8d;
+  z-index: 5;
+}
+.empty-shelf strong { color: #2b2b2b; }
