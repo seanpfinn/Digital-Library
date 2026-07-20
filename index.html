@@ -69,6 +69,10 @@
     </div>
   </header>
 
+  <p class="empty-shelf" id="emptyShelf" hidden>
+    Your library is empty. Use <strong>Add book</strong> to put something on the shelf.
+  </p>
+
   <main class="stage" id="stage">
     <div class="coverflow" id="coverflow"></div>
     <div class="book-meta" id="bookMeta">
@@ -88,6 +92,7 @@
         <p class="tray-author" id="trayAuthor"></p>
         <p class="tray-synopsis" id="traySynopsis"></p>
         <div class="tray-ctas" id="trayCtas"></div>
+        <button class="tray-remove" id="trayRemove" type="button">Remove from library</button>
       </div>
     </div>
   </aside>
