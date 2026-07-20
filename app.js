@@ -43,6 +43,15 @@ const coverflowEl = document.getElementById('coverflow');
 const bookTitleEl = document.getElementById('bookTitle');
 const bookAuthorEl = document.getElementById('bookAuthor');
 
+/* Bump when the cover art in covers/ is replaced, so browsers don't
+   keep serving a stale low-resolution copy. */
+const COVER_VERSION = '2';
+
+function coverSrc(book) {
+  // Captured/uploaded covers are data URLs — leave those alone.
+  return book.cover.startsWith('data:') ? book.cover : `${book.cover}?v=${COVER_VERSION}`;
+}
+
 function buildCoverflow() {
   coverflowEl.innerHTML = '';
   books.forEach((book, i) => {
@@ -50,15 +59,17 @@ function buildCoverflow() {
     el.className = 'book';
     el.dataset.index = i;
 
+    const src = coverSrc(book);
+
     const cover = document.createElement('img');
     cover.className = 'cover';
-    cover.src = book.cover;
+    cover.src = src;
     cover.alt = book.title;
     cover.draggable = false;
 
     const reflection = document.createElement('img');
     reflection.className = 'reflection';
-    reflection.src = book.cover;
+    reflection.src = src;
     reflection.alt = '';
     reflection.setAttribute('aria-hidden', 'true');
     reflection.draggable = false;

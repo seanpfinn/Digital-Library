@@ -99,10 +99,10 @@ html, body {
 .book .reflection {
   top: calc(100% + 3px);
   transform: scaleY(-1);
-  opacity: 0.4;
+  opacity: 1;
   pointer-events: none;
-  -webkit-mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, transparent 42%);
-  mask-image: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, transparent 42%);
+  -webkit-mask-image: linear-gradient(to top, #000 0%, transparent 42%);
+  mask-image: linear-gradient(to top, #000 0%, transparent 42%);
 }
 
 .book-meta {
