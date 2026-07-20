@@ -6,13 +6,43 @@
   <title>Digital Library</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
-    <img class="logo" src="assets/logo.svg" alt="Digital Library" />
-    <div class="library-pill">Library</div>
+    <div class="topbar-row">
+      <img class="logo" src="assets/logo.svg" alt="Digital Library" />
+      <div class="search" role="search">
+        <input id="searchInput" type="search" placeholder="Search by author, book, or genre"
+               aria-label="Search by author, book, or genre" autocomplete="off" />
+      </div>
+      <button class="add-btn" id="addBtn">Add book</button>
+    </div>
+
+    <div class="nav-row">
+      <nav class="tabs" id="tabsNav">
+        <button class="tab-link" data-tab="explore">Explore</button>
+        <button class="tab-link active" data-tab="collection">
+          Collection
+          <img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <button class="tab-link" data-tab="reading-list">Reading List</button>
+        <button class="tab-link" data-tab="settings">Settings</button>
+      </nav>
+
+      <div class="view-ctas" id="viewCtas" role="group" aria-label="View">
+        <button class="view-cta active" data-view="cover" aria-label="Cover view" title="Cover view">
+          <img src="assets/slideshow.svg" alt="" />
+        </button>
+        <button class="view-cta" data-view="list" aria-label="List view" title="List view">
+          <img src="assets/list.svg" alt="" />
+        </button>
+        <button class="view-cta" data-view="grid" aria-label="Grid view" title="Grid view">
+          <img src="assets/grid.svg" alt="" />
+        </button>
+      </div>
+    </div>
   </header>
 
   <main class="stage" id="stage">
@@ -23,12 +53,10 @@
     </div>
   </main>
 
-  <button class="add-btn" id="addBtn" title="Add a book">
-    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
-      <path d="M11 3v16M3 11h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-    </svg>
-    <span>Add book</span>
-  </button>
+  <section class="browse" id="browse" hidden>
+    <div class="browse-inner" id="browseInner"></div>
+    <p class="browse-empty" id="browseEmpty" hidden>No books match that search.</p>
+  </section>
 
   <!-- Add-book modal -->
   <div class="modal-backdrop" id="modalBackdrop" hidden>

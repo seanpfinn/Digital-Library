@@ -137,6 +137,8 @@ function select(i) {
 /* Keyboard */
 document.addEventListener('keydown', (e) => {
   if (!modalBackdrop.hidden) return;
+  if (currentView !== 'cover') return;
+  if (e.target.tagName === 'INPUT') return; // don't hijack arrows while typing
   if (e.key === 'ArrowLeft') select(selectedIndex - 1);
   if (e.key === 'ArrowRight') select(selectedIndex + 1);
 });
@@ -178,6 +180,94 @@ stage.addEventListener('pointerup', () => (dragStartX = null));
 stage.addEventListener('pointercancel', () => (dragStartX = null));
 
 window.addEventListener('resize', layout);
+
+/* ============================== Views, tabs & search ============================== */
+
+const stageEl = document.getElementById('stage');
+const browseEl = document.getElementById('browse');
+const browseInner = document.getElementById('browseInner');
+const browseEmpty = document.getElementById('browseEmpty');
+const searchInput = document.getElementById('searchInput');
+
+let currentView = 'cover';
+
+/* Books matching the current search, or all of them when the box is empty. */
+function visibleBooks() {
+  const q = searchInput.value.trim().toLowerCase();
+  if (!q) return books;
+  return books.filter(
+    (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+  );
+}
+
+function renderBrowse() {
+  const list = visibleBooks();
+  browseInner.className = `browse-inner ${currentView}`;
+  browseInner.innerHTML = '';
+  browseEmpty.hidden = list.length > 0;
+
+  list.forEach((book) => {
+    const item = document.createElement('div');
+    item.className = 'browse-item';
+
+    const img = document.createElement('img');
+    img.src = coverSrc(book);
+    img.alt = book.title;
+    img.loading = 'lazy';
+
+    const title = document.createElement('h3');
+    title.textContent = book.title;
+
+    const author = document.createElement('p');
+    author.textContent = book.author;
+
+    const text = document.createElement('div');
+    text.append(title, author);
+
+    item.append(img, text);
+    // Jump to this book in the cover flow
+    item.addEventListener('click', () => {
+      select(books.indexOf(book));
+      setView('cover');
+    });
+    browseInner.appendChild(item);
+  });
+}
+
+function setView(view) {
+  currentView = view;
+  document.querySelectorAll('.view-cta').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.view === view);
+  });
+
+  const isCover = view === 'cover';
+  stageEl.hidden = !isCover;
+  browseEl.hidden = isCover;
+  if (isCover) layout();
+  else renderBrowse();
+}
+
+document.getElementById('viewCtas').addEventListener('click', (e) => {
+  const btn = e.target.closest('.view-cta');
+  if (btn) setView(btn.dataset.view);
+});
+
+document.getElementById('tabsNav').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-link');
+  if (!btn) return;
+  document.querySelectorAll('.tab-link').forEach((t) => t.classList.remove('active'));
+  btn.classList.add('active');
+});
+
+/* In cover view, searching jumps to the first match; elsewhere it filters. */
+searchInput.addEventListener('input', () => {
+  if (currentView === 'cover') {
+    const match = visibleBooks()[0];
+    if (match && searchInput.value.trim()) select(books.indexOf(match));
+  } else {
+    renderBrowse();
+  }
+});
 
 /* ============================== Add-book modal ============================== */
 
@@ -494,6 +584,7 @@ confirmAddBtn.addEventListener('click', () => {
   saveCustomBooks();
   buildCoverflow();
   select(books.length - 1);
+  if (currentView !== 'cover') renderBrowse();
   closeModal();
 });
 
