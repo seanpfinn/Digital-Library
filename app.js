@@ -86,13 +86,26 @@ function buildCoverflow() {
 
 function layout() {
   const isNarrow = window.innerWidth < 900;
-  // Derived from the cover width so the flow stays in proportion at every
-  // breakpoint, and the outer covers bleed past the edge of the viewport.
-  const coverW = parseFloat(
-    getComputedStyle(document.documentElement).getPropertyValue('--cover-w')
-  );
-  const step = coverW * (isNarrow ? 0.28 : 0.335);       // gap between stacked side covers
+  // Measured from a rendered cover rather than the --cover-w custom property:
+  // getPropertyValue hands back the unresolved token string, which no longer
+  // parses now that the width is a min()/calc() expression.
+  const firstBook = coverflowEl.querySelector('.book');
+  const coverW = firstBook ? firstBook.offsetWidth : 255;
   const firstOffset = coverW * (isNarrow ? 0.68 : 0.95); // centre to first side cover
+  let step = coverW * (isNarrow ? 0.28 : 0.335);         // gap between stacked side covers
+
+  // Guarantee the shelf runs off both edges: on a wide screen the proportional
+  // spacing alone can stop short, so widen the step until the outermost cover
+  // clears the viewport.
+  const outermost = Math.floor(books.length / 2);
+  if (outermost > 1) {
+    const needed = window.innerWidth / 2 + coverW * 0.35;
+    const reach = firstOffset + (outermost - 1) * step + coverW / 2;
+    if (reach < needed) {
+      step = (needed - firstOffset - coverW / 2) / (outermost - 1);
+    }
+  }
+
   const sideAngle = 42;
 
   const n = books.length;
@@ -594,6 +607,23 @@ confirmAddBtn.addEventListener('click', () => {
   if (currentView !== 'cover') renderBrowse();
   closeModal();
 });
+
+/* ============================== Viewport lock ============================== */
+
+/* iOS Safari ignores user-scalable=no, so pinch and double-tap zoom have to be
+   refused directly. Single-finger gestures are left alone so the shelf can still
+   be dragged and the list still scrolled. */
+['gesturestart', 'gesturechange', 'gestureend'].forEach((type) => {
+  document.addEventListener(type, (e) => e.preventDefault(), { passive: false });
+});
+
+document.addEventListener(
+  'touchmove',
+  (e) => {
+    if (e.touches.length > 1) e.preventDefault();
+  },
+  { passive: false }
+);
 
 /* ============================== Init ============================== */
 

@@ -3,8 +3,14 @@
 [hidden] { display: none !important; }
 
 :root {
-  --cover-w: 318px;
-  --cover-h: 470px;
+  /* Covers fill whatever vertical room the header leaves, so they stay as large
+     as they can be at any window size. 306px is the space above the cover
+     (header + gap) plus the title block below it; 0.886 undoes the 1.129x
+     perspective magnification. The width cap keeps phones sane, and the height
+     is derived back from it so the 0.677 cover ratio always holds. */
+  --cover-fit: clamp(260px, calc((100vh - 344px) * 0.886), 640px);
+  --cover-w: min(calc(var(--cover-fit) * 0.677), calc(100vw * 0.58));
+  --cover-h: calc(var(--cover-w) / 0.677);
   --side-scale: 0.8;
   --title-color: #000;
   --author-color: #8d8d8d;
@@ -25,7 +31,24 @@ html, body {
   overflow: hidden;
   background: #fff;
   font-family: 'Figtree', sans-serif;
+  /* Lock the page: no rubber-band scroll, no text auto-sizing on rotate. */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
+
+/* Pins the app to the viewport so the page itself can never pan. */
+body {
+  position: fixed;
+  inset: 0;
+  touch-action: manipulation; /* also kills double-tap-to-zoom */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The shelf handles its own horizontal drag, so the browser gets no gestures. */
+.stage { touch-action: none; }
+/* List and grid scroll vertically, and stop at their own bounds. */
+.browse { touch-action: pan-y; overscroll-behavior: contain; }
 
 /* ---------- Top bar ---------- */
 .topbar {
@@ -559,18 +582,12 @@ html, body {
 .confirm-buttons { display: flex; gap: 8px; justify-content: flex-end; }
 
 /* ---------- Small screens ---------- */
-/* Shorter viewports: scale the shelf down so it stays fully visible. */
-@media (min-width: 901px) and (max-height: 860px) {
-  :root { --cover-w: 270px; --cover-h: 400px; --shelf-gap: 60px; }
-}
-@media (min-width: 901px) and (max-height: 740px) {
-  :root { --cover-w: 205px; --cover-h: 303px; --shelf-gap: 44px; }
-}
+/* Shorter viewports: tighten the header rhythm; the covers size themselves. */
+@media (min-width: 901px) and (max-height: 820px) { :root { --shelf-gap: 56px; } }
+@media (min-width: 901px) and (max-height: 700px) { :root { --shelf-gap: 40px; } }
 
 @media (max-width: 900px) {
   :root {
-    --cover-w: 210px;
-    --cover-h: 311px;
     --shelf-gap: 38px;
     /* 20px padding + 36px logo row + 30px gap + 44px search + gap + 39px nav */
     --nav-bottom: calc(20px + 36px + 30px + 44px + var(--shelf-gap) + 39px);
