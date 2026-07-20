@@ -752,21 +752,42 @@ function setStatus(msg, isError = false) {
   modalStatus.classList.toggle('error', isError);
 }
 
+/* The modal shows one view at a time: the live camera (capture), a spinner
+   (loading), the matched book (match), an error, or manual entry. */
+const modalTabsEl = document.querySelector('.modal-tabs');
+const matchLoading = document.getElementById('matchLoading');
+const matchLoadingMsg = document.getElementById('matchLoadingMsg');
+const matchConfirm = document.getElementById('matchConfirm');
+const matchError = document.getElementById('matchError');
+let modalView = 'capture';
+
+function setModalView(view) {
+  modalView = view;
+  const capturing = view === 'capture';
+  modalTabsEl.hidden = !capturing;
+  cameraWrap.hidden = !(capturing && mediaStream);
+  cameraFallback.hidden = !(capturing && !mediaStream);
+  scanActions.hidden = !(capturing && mode === 'scan');
+  photoActions.hidden = !(capturing && mode === 'photo');
+  matchLoading.hidden = view !== 'loading';
+  matchConfirm.hidden = view !== 'match';
+  matchError.hidden = view !== 'error';
+  confirmCard.hidden = view !== 'manual';
+  if (view !== 'capture') setStatus('');
+}
+
 function setMode(next) {
   mode = next;
   tabScan.classList.toggle('active', mode === 'scan');
   tabScan.setAttribute('aria-selected', String(mode === 'scan'));
   tabPhoto.classList.toggle('active', mode === 'photo');
   tabPhoto.setAttribute('aria-selected', String(mode === 'photo'));
-  scanActions.hidden = mode !== 'scan';
-  photoActions.hidden = mode !== 'photo';
   cameraWrap.classList.toggle('photo-mode', mode === 'photo');
   cameraNote.textContent =
     mode === 'scan'
       ? 'Point the camera at the barcode on the back of the book.'
       : 'Line up the front cover inside the frame.';
-  hideConfirm();
-  setStatus('');
+  setModalView('capture');
   if (mode === 'scan') startBarcodeLoop();
   else stopBarcodeLoop();
 }
@@ -776,7 +797,6 @@ tabPhoto.addEventListener('click', () => setMode('photo'));
 
 async function openModal() {
   modalBackdrop.hidden = false;
-  hideConfirm();
   setStatus('');
   isbnInput.value = '';
   await startCamera();
@@ -876,7 +896,7 @@ async function getBarcodeDetector() {
 function startBarcodeLoop() {
   stopBarcodeLoop();
   scanTimer = setInterval(async () => {
-    if (!mediaStream || !modalBackdrop || modalBackdrop.hidden || !confirmCard.hidden) return;
+    if (!mediaStream || modalBackdrop.hidden || modalView !== 'capture') return;
     const detector = await getBarcodeDetector();
     if (!detector) {
       stopBarcodeLoop();
@@ -888,7 +908,7 @@ function startBarcodeLoop() {
       const isbn = codes.map((c) => c.rawValue).find((v) => /^97[89]\d{10}$/.test(v));
       if (isbn) {
         stopBarcodeLoop();
-        await lookupAndConfirm(isbn);
+        await lookupByIsbn(isbn);
       }
     } catch { /* frame not ready yet */ }
   }, 350);
@@ -903,8 +923,8 @@ function stopBarcodeLoop() {
 
 /* ---------- Open Library lookup ---------- */
 
-async function lookupAndConfirm(isbn) {
-  setStatus(`Found ISBN ${isbn} — looking it up…`);
+async function lookupByIsbn(isbn) {
+  showLoading(`Looking up ISBN ${isbn}…`);
   try {
     const res = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
     if (!res.ok) throw new Error(`No record for ISBN ${isbn}`);
@@ -918,13 +938,21 @@ async function lookupAndConfirm(isbn) {
       } catch { /* author optional */ }
     }
 
-    const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-    showConfirm({ title: data.title || '', author, coverSrc: coverUrl });
-    setStatus('');
+    const match = {
+      title: data.title || 'Untitled',
+      author,
+      year: (data.publish_date || '').match(/\d{4}/)?.[0] || '',
+      coverUrl: `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`,
+      thumbUrl: `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`,
+    };
+    allMatches = [match];
+    showMatch(match);
   } catch (err) {
     console.warn(err);
-    setStatus(`Couldn't find ISBN ${isbn} on Open Library. Try again or use a photo of the cover.`, true);
-    if (mode === 'scan') startBarcodeLoop();
+    showError(
+      "We couldn't find that ISBN",
+      `No book matched ISBN ${isbn}. Double-check the number, use the cover photo instead, or enter the details yourself.`
+    );
   }
 }
 
@@ -935,7 +963,7 @@ isbnLookupBtn.addEventListener('click', () => {
     return;
   }
   stopBarcodeLoop();
-  lookupAndConfirm(isbn);
+  lookupByIsbn(isbn);
 });
 isbnInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') isbnLookupBtn.click();
@@ -943,9 +971,22 @@ isbnInput.addEventListener('keydown', (e) => {
 
 /* ---------- Identifying a book from a photograph ---------- */
 
-const candidatesEl = document.getElementById('candidates');
 const candidateListEl = document.getElementById('candidateList');
 const usePhotoBtn = document.getElementById('usePhotoBtn');
+const matchCover = document.getElementById('matchCover');
+const matchTitle = document.getElementById('matchTitle');
+const matchAuthor = document.getElementById('matchAuthor');
+const matchYear = document.getElementById('matchYear');
+const matchAddBtn = document.getElementById('matchAddBtn');
+const matchRejectBtn = document.getElementById('matchRejectBtn');
+const matchOthers = document.getElementById('matchOthers');
+const errorTitle = document.getElementById('errorTitle');
+const errorMsg = document.getElementById('errorMsg');
+const errorRetryBtn = document.getElementById('errorRetryBtn');
+const errorManualBtn = document.getElementById('errorManualBtn');
+
+let allMatches = [];
+let currentMatch = null;
 
 /* Tesseract is ~6MB of wasm and language data, so it is fetched from
    assets/vendor only the first time a cover actually needs reading. */
@@ -1084,17 +1125,47 @@ async function searchOpenLibrary(query) {
   return (data.docs || []).filter((d) => d.cover_i);
 }
 
-function showCandidates(matches, photoSrc) {
-  pendingCoverSrc = photoSrc; // kept for the "use my photo" fallback
-  candidateListEl.innerHTML = '';
+/* Normalise a search doc or ISBN record into one match shape. */
+function normalizeMatch(d) {
+  if (d.coverUrl) return d; // already normalized (ISBN path)
+  return {
+    title: d.title || 'Untitled',
+    author: d.author_name?.[0] || '',
+    year: d.first_publish_year || '',
+    coverUrl: `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg`,
+    thumbUrl: `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`,
+  };
+}
 
-  matches.forEach((m) => {
+/* The photo is only a reference: once matched, the book is stored with the
+   publisher's hi-res artwork from Open Library, never the snapshot. */
+function showMatch(match) {
+  stopBarcodeLoop();
+  currentMatch = match;
+
+  matchCover.onerror = () => { matchCover.onerror = null; matchCover.src = match.thumbUrl || ''; };
+  matchCover.src = match.coverUrl;
+  matchTitle.textContent = match.title;
+  matchAuthor.textContent = match.author || 'Unknown author';
+  matchYear.textContent = match.year ? `First published ${match.year}` : '';
+  matchYear.hidden = !match.year;
+
+  matchOthers.hidden = true;
+  renderOtherMatches();
+  setModalView('match');
+}
+
+/* Every match except the one on screen, offered under "Not the right book". */
+function renderOtherMatches() {
+  const others = allMatches.filter((m) => m !== currentMatch);
+  candidateListEl.innerHTML = '';
+  others.forEach((m) => {
     const btn = document.createElement('button');
     btn.className = 'candidate';
     btn.type = 'button';
 
     const img = document.createElement('img');
-    img.src = `https://covers.openlibrary.org/b/id/${m.cover_i}-M.jpg`;
+    img.src = m.thumbUrl || m.coverUrl;
     img.alt = '';
 
     const text = document.createElement('div');
@@ -1102,35 +1173,43 @@ function showCandidates(matches, photoSrc) {
     const t = document.createElement('strong');
     t.textContent = m.title;
     const a = document.createElement('span');
-    a.textContent = [m.author_name?.[0], m.first_publish_year].filter(Boolean).join(' · ');
+    a.textContent = [m.author, m.year].filter(Boolean).join(' · ');
     text.append(t, a);
 
     btn.append(img, text);
-    btn.addEventListener('click', () => {
-      candidatesEl.hidden = true;
-      showConfirm({
-        title: m.title,
-        author: m.author_name?.[0] || '',
-        // Prefer the publisher's artwork over the photograph
-        coverSrc: `https://covers.openlibrary.org/b/id/${m.cover_i}-L.jpg`,
-      });
-    });
+    btn.addEventListener('click', () => showMatch(m));
     candidateListEl.appendChild(btn);
   });
-
-  candidatesEl.hidden = false;
 }
 
-usePhotoBtn.addEventListener('click', () => {
-  candidatesEl.hidden = true;
-  showConfirm({ title: '', author: '', coverSrc: pendingCoverSrc, needsTitle: true });
+matchAddBtn.addEventListener('click', () => {
+  if (currentMatch) addBookToLibrary(currentMatch);
 });
+
+matchRejectBtn.addEventListener('click', () => {
+  if (allMatches.length > 1) matchOthers.hidden = false;
+  else showManual(pendingCoverSrc);
+});
+
+usePhotoBtn.addEventListener('click', () => showManual(pendingCoverSrc));
+
+function showLoading(msg) {
+  stopBarcodeLoop();
+  matchLoadingMsg.textContent = msg;
+  setModalView('loading');
+}
+
+function showError(title, msg) {
+  stopBarcodeLoop();
+  errorTitle.textContent = title;
+  errorMsg.textContent = msg;
+  setModalView('error');
+}
 
 /* Barcode first (exact), then read the cover text and search for a match. */
 async function identify(source, photoSrc) {
-  hideConfirm();
-  candidatesEl.hidden = true;
   pendingCoverSrc = photoSrc;
+  showLoading('Reading the cover…');
 
   const detector = await getBarcodeDetector();
   if (detector) {
@@ -1138,13 +1217,12 @@ async function identify(source, photoSrc) {
       const codes = await detector.detect(source);
       const isbn = codes.map((c) => c.rawValue).find((v) => /^97[89]\d{10}$/.test(v));
       if (isbn) {
-        await lookupAndConfirm(isbn);
+        await lookupByIsbn(isbn);
         return;
       }
     } catch { /* no barcode in frame — fall through to reading the cover */ }
   }
 
-  setStatus('Reading the cover…');
   let phrases = [];
   try {
     const worker = await getOcrWorker();
@@ -1156,21 +1234,36 @@ async function identify(source, photoSrc) {
   }
 
   if (!phrases.length) {
-    setStatus("Couldn't read any text on that cover. Add the details yourself.", true);
-    showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+    showError(
+      "We couldn't read that cover",
+      'The title was hard to make out. Try again with the whole cover in frame and even lighting, or enter the details yourself.'
+    );
     return;
   }
 
-  setStatus(`Looking up “${phrases[0].slice(0, 44)}”…`);
-  const { matches } = await findMatches(phrases);
+  showLoading('Searching for a match…');
+  let matches = [];
+  try {
+    matches = (await findMatches(phrases)).matches;
+  } catch (err) {
+    console.warn(err);
+    showError(
+      'Search is unavailable',
+      "We couldn't reach the book database just now. Check your connection and try again, or enter the details yourself."
+    );
+    return;
+  }
 
   if (!matches.length) {
-    setStatus('No match found for that cover. Add the details yourself.', true);
-    showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+    showError(
+      'No match found',
+      "We read the cover but couldn't find that book. Try again, or enter the details yourself."
+    );
     return;
   }
-  setStatus('');
-  showCandidates(matches, photoSrc);
+
+  allMatches = matches.map(normalizeMatch);
+  showMatch(allMatches[0]);
 }
 
 captureBtn.addEventListener('click', async () => {
@@ -1201,41 +1294,36 @@ fileInput.addEventListener('change', async () => {
   await identify(captureCanvas, captureCanvas.toDataURL('image/jpeg', 0.85));
 });
 
-/* ---------- Confirm & add ---------- */
+/* ---------- Manual entry & adding ---------- */
 
-function showConfirm({ title, author, coverSrc, needsTitle = false }) {
-  pendingCoverSrc = coverSrc;
-  confirmCover.src = coverSrc;
-  confirmTitle.value = title;
-  confirmAuthor.value = author;
-  confirmCard.hidden = false;
-  setStatus(needsTitle ? 'Add the title (and author) so the book is searchable.' : '');
-  if (needsTitle) confirmTitle.focus();
+/* The last-resort fallback: no catalogue match was accepted, so the photo
+   stands in as the cover and the reader supplies the details. */
+function showManual(coverSrc) {
+  pendingCoverSrc = coverSrc || '';
+  confirmCover.src = pendingCoverSrc;
+  confirmCover.style.display = pendingCoverSrc ? '' : 'none';
+  confirmTitle.value = '';
+  confirmAuthor.value = '';
+  setModalView('manual');
+  setStatus('Add the title (and author) so the book is searchable.');
+  confirmTitle.focus();
 }
 
-function hideConfirm() {
-  confirmCard.hidden = true;
-  pendingCoverSrc = null;
+/* Return to the live camera from any result panel. */
+function backToCapture() {
+  setMode(mode);
 }
 
-retryBtn.addEventListener('click', () => {
-  hideConfirm();
-  setStatus('');
-  if (mode === 'scan') startBarcodeLoop();
-});
+retryBtn.addEventListener('click', backToCapture);
+errorRetryBtn.addEventListener('click', backToCapture);
+errorManualBtn.addEventListener('click', () => showManual(pendingCoverSrc));
 
-confirmAddBtn.addEventListener('click', () => {
-  const title = confirmTitle.value.trim();
-  if (!title) {
-    setStatus('A title is required.', true);
-    confirmTitle.focus();
-    return;
-  }
+function addBookToLibrary({ title, author, cover }) {
   books.push({
     id: `custom-${Date.now()}`,
-    title,
-    author: confirmAuthor.value.trim(),
-    cover: pendingCoverSrc,
+    title: title.trim(),
+    author: (author || '').trim(),
+    cover,
     custom: true,
   });
   saveCustomBooks();
@@ -1244,6 +1332,16 @@ confirmAddBtn.addEventListener('click', () => {
   selectBook(books.length - 1);
   if (currentView !== 'cover') renderBrowse();
   closeModal();
+}
+
+confirmAddBtn.addEventListener('click', () => {
+  const title = confirmTitle.value.trim();
+  if (!title) {
+    setStatus('A title is required.', true);
+    confirmTitle.focus();
+    return;
+  }
+  addBookToLibrary({ title, author: confirmAuthor.value, cover: pendingCoverSrc });
 });
 
 /* ============================== Viewport lock ============================== */

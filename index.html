@@ -143,14 +143,52 @@
 
       <div class="modal-status" id="modalStatus" hidden></div>
 
-      <!-- Matches found by reading the cover -->
-      <div class="candidates" id="candidates" hidden>
-        <p class="candidates-label">Best matches — pick the right one:</p>
-        <div class="candidate-list" id="candidateList"></div>
-        <button class="btn secondary" id="usePhotoBtn">None of these — use my photo</button>
+      <!-- Reading the cover / searching -->
+      <div class="match-loading" id="matchLoading" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <p id="matchLoadingMsg">Reading the cover…</p>
       </div>
 
-      <!-- Confirmation card shown once a book is found / photographed -->
+      <!-- A book was matched — confirm it before adding -->
+      <div class="match-confirm" id="matchConfirm" hidden>
+        <p class="match-question">Is this your book?</p>
+        <div class="match-cover-wrap">
+          <img class="match-cover" id="matchCover" alt="Matched book cover" />
+        </div>
+        <h3 class="match-title" id="matchTitle"></h3>
+        <p class="match-author" id="matchAuthor"></p>
+        <p class="match-year" id="matchYear" hidden></p>
+        <div class="match-actions">
+          <button class="btn primary" id="matchAddBtn">Add to Library</button>
+          <button class="btn secondary" id="matchRejectBtn">Not the right book</button>
+        </div>
+        <div class="match-others" id="matchOthers" hidden>
+          <p class="candidates-label">Other matches</p>
+          <div class="candidate-list" id="candidateList"></div>
+          <button class="link-btn" id="usePhotoBtn">None of these — enter details manually</button>
+        </div>
+      </div>
+
+      <!-- Nothing matched -->
+      <div class="match-error" id="matchError" hidden>
+        <div class="error-art" aria-hidden="true">
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="40" cy="40" r="40" fill="#EAF0FF"/>
+            <circle cx="36" cy="36" r="15" fill="#fff" stroke="#004BEC" stroke-width="3"/>
+            <line x1="46.5" y1="46.5" x2="57" y2="57" stroke="#004BEC" stroke-width="4" stroke-linecap="round"/>
+            <path d="M31.6 32.4c0-2.5 2-4.3 4.6-4.3s4.6 1.7 4.6 4.1c0 3-3.4 3.4-3.9 6" stroke="#004BEC" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="36.2" cy="42.6" r="1.7" fill="#004BEC"/>
+          </svg>
+        </div>
+        <h3 class="error-title" id="errorTitle">We couldn't find that book</h3>
+        <p class="error-msg" id="errorMsg"></p>
+        <div class="error-actions">
+          <button class="btn primary" id="errorRetryBtn">Try again</button>
+          <button class="link-btn" id="errorManualBtn">Enter details manually</button>
+        </div>
+      </div>
+
+      <!-- Manual entry fallback -->
       <div class="confirm-card" id="confirmCard" hidden>
         <img id="confirmCover" alt="Book cover preview" />
         <div class="confirm-fields">

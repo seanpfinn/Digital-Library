@@ -944,3 +944,144 @@ body {
   z-index: 5;
 }
 .empty-shelf strong { color: #2b2b2b; }
+
+/* ---------- Add-book: match, loading & error states ---------- */
+.match-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 44px 0;
+}
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 3px solid #e6e6ef;
+  border-top-color: #004bec;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.match-loading p {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #6f6f6f;
+}
+
+/* Matched book — the confirmation */
+.match-confirm {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.match-question {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #8d8d8d;
+}
+.match-cover-wrap {
+  margin: 14px 0 16px;
+  animation: match-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+@keyframes match-pop {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.match-cover {
+  width: 150px;
+  aspect-ratio: 0.66;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #eee;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+.match-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 20px;
+  line-height: 1.25;
+  color: #1d1d1f;
+}
+.match-author {
+  margin-top: 3px;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  color: #8d8d8d;
+}
+.match-year {
+  margin-top: 5px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 13px;
+  color: #b1b1b1;
+}
+.match-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 20px;
+}
+.match-actions .btn { width: 100%; height: 44px; }
+
+.match-others {
+  width: 100%;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+  text-align: left;
+}
+
+/* Text-only button, used for the quiet fallbacks */
+.link-btn {
+  display: block;
+  margin: 10px auto 0;
+  padding: 6px;
+  border: none;
+  background: none;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #8d8d8d;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.link-btn:hover { color: #004bec; }
+
+/* Error state */
+.match-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 26px 8px 6px;
+}
+.error-art {
+  margin-bottom: 12px;
+  animation: match-pop 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.error-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 19px;
+  color: #1d1d1f;
+}
+.error-msg {
+  margin-top: 8px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #8d8d8d;
+  max-width: 340px;
+}
+.error-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin-top: 18px;
+}
+.error-actions .btn { width: 100%; height: 44px; }
