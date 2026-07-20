@@ -237,7 +237,9 @@ function renderBrowse() {
 function setView(view) {
   currentView = view;
   document.querySelectorAll('.view-cta').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.view === view);
+    const on = btn.dataset.view === view;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
   });
 
   const isCover = view === 'cover';
