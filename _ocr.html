@@ -164,20 +164,21 @@ window.__done = null;
 window.addEventListener("load", () => setTimeout(async () => {
   const out = [];
   try {
-    const img = new Image();
-    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "covers/atomic-habits.jpg"; });
-    const c = document.createElement("canvas");
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    c.getContext("2d").drawImage(img, 0, 0);
     const w = await getOcrWorker();
-    const { data } = await w.recognize(c, {}, { text: true, blocks: true });
-    const q = queryFromOcr(data);
-    out.push("QUERY=[" + q + "]");
-    const m = await searchOpenLibrary(q);
-    out.push("TOP=" + m.slice(0,2).map(x => x.title + "/" + (x.author_name||[])[0]).join(" | "));
+    for (const name of ["atomic-habits","inspired","build","hooked","creative-act"]) {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = "covers/"+name+".jpg"; });
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      c.getContext("2d").drawImage(img, 0, 0);
+      const { data } = await w.recognize(c, {}, { text: true, blocks: true });
+      const q = queryFromOcr(data);
+      let top = "(none)";
+      try { const m = await searchOpenLibrary(q); top = m.length ? m[0].title + " / " + (m[0].author_name||[])[0] : "(none)"; } catch(e){ top = "ERR"; }
+      out.push(name + "  ->  " + top + "   [q: " + q.slice(0,60) + "]");
+    }
   } catch (e) { out.push("ERR=" + (e && e.message)); }
-  window.__done = out.join(" || ");
-  document.title = "RESULT " + window.__done;
+  window.__done = out.join("\n");
 }, 500));
 </script></body>
 </html>

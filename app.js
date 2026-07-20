@@ -78,25 +78,54 @@ const DEFAULT_BOOKS = [
 ];
 
 const STORAGE_KEY = 'digital-library-custom-books';
+const REMOVED_KEY = 'digital-library-removed';
 
-function loadCustomBooks() {
+function loadJSON(key, fallback) {
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    return JSON.parse(localStorage.getItem(key)) ?? fallback;
   } catch {
-    return [];
+    return fallback;
   }
 }
+
+function loadCustomBooks() {
+  return loadJSON(STORAGE_KEY, []);
+}
+
+/* Ids of built-in books the reader has taken off the shelf. Removing a
+   custom book just drops it; removing a default one has to be remembered. */
+let removedIds = loadJSON(REMOVED_KEY, []);
 
 function saveCustomBooks() {
   const custom = books.filter((b) => b.custom);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
+    localStorage.setItem(REMOVED_KEY, JSON.stringify(removedIds));
   } catch (e) {
     console.warn('Could not persist books (storage full?)', e);
   }
 }
 
-let books = [...DEFAULT_BOOKS, ...loadCustomBooks()];
+function removeBook(id) {
+  const i = books.findIndex((b) => b.id === id);
+  if (i < 0) return;
+  const wasDefault = DEFAULT_BOOKS.some((b) => b.id === id);
+
+  books.splice(i, 1);
+  if (wasDefault && !removedIds.includes(id)) removedIds.push(id);
+  saveCustomBooks();
+
+  // Keep the shelf pointing at roughly where the reader was looking.
+  if (books.length) slotCursor = Math.max(0, Math.min(slotCursor, books.length - 1));
+  buildCoverflow();
+  if (currentView !== 'cover') renderBrowse();
+  updateEmptyState();
+}
+
+let books = [
+  ...DEFAULT_BOOKS.filter((b) => !removedIds.includes(b.id)),
+  ...loadCustomBooks(),
+];
 
 /* Position along the shelf. It counts slots, not books, and is deliberately
    unbounded — the book on screen is slotCursor modulo books.length. */
@@ -166,6 +195,11 @@ function wrapOffset(d) {
 
 function buildCoverflow() {
   const n = books.length;
+  if (!n) {
+    coverflowEl.innerHTML = '';
+    slotCount = 0;
+    return;
+  }
   const { offscreen } = shelfMetrics();
   // Enough whole copies of the library to fill the screen and still leave
   // hidden slots either side for recycling.
@@ -207,6 +241,7 @@ function buildCoverflow() {
 }
 
 function layout() {
+  if (!books.length || !slotCount) return;
   const { firstOffset, step, offscreen } = shelfMetrics();
   const sideAngle = 42;
 
@@ -903,23 +938,39 @@ function ocrLines(data) {
   return out;
 }
 
-/* Cover furniture that is never part of the title. */
+/* Sales copy and imprints that are never part of the title. */
 const COVER_BLURB =
-  /(new york times|bestseller|best seller|copies sold|author of|million|instant|national|award|winner|edition|foreword|introduction|www\.|\.com|publish)/i;
+  /(new york times|bestseller|best seller|copies sold|author of|million|instant|national|award|winner|edition|foreword|introduction|www\.|\.com|publish|wiley|penguin|harper|random house|vintage|simon & schuster|macmillan|hachette|portfolio|crown|scribner|bloomsbury)/i;
 
-/* Rank lines by how big the type is, not how long the line is: on a book
-   cover the title is set largest, while the longest lines are usually
-   review blurbs and sales copy. */
+/* Rank by how big the type is, not how long the line is: a cover sets its
+   title largest, while the longest lines are review blurbs and sales copy.
+   Display faces often defeat OCR outright (Atomic Habits' halftone title
+   reads as "oe oe a 2 eee"), and low confidence is the reliable tell — so
+   drop those first, then rank what is left by size. Even when the title
+   itself is unreadable, the author line or subtitle usually identifies it. */
 function queryFromOcr(data) {
-  const lines = ocrLines(data)
-    .map((l) => ({
-      text: (l.text || '').replace(/[^A-Za-z0-9'’&:\- ]/g, ' ').replace(/\s+/g, ' ').trim(),
-      size: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0,
-    }))
+  const all = ocrLines(data)
+    .map((l) => {
+      const raw = l.text || '';
+      return {
+        raw,
+        // Cover quotes are pull-quotes from reviews, never the title.
+        quoted: /^\s*["“”'‘’]/.test(raw) || /must[- ]read|praise for|essential reading/i.test(raw),
+        text: raw.replace(/[^A-Za-z0-9'’&\- ]/g, ' ').replace(/\s+/g, ' ').trim(),
+        size: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0,
+        conf: l.confidence || 0,
+      };
+    })
     .filter((l) => l.text.length >= 3 && /[A-Za-z]{3}/.test(l.text))
-    .filter((l) => !COVER_BLURB.test(l.text));
+    .filter((l) => !l.quoted && !COVER_BLURB.test(l.text));
 
-  lines.sort((a, b) => b.size - a.size);
+  const bySize = (min) =>
+    all.filter((l) => l.conf >= min).sort((a, b) => b.size - a.size);
+
+  // Relax the bar rather than give up if a cover reads poorly overall.
+  let lines = bySize(70);
+  if (!lines.length) lines = bySize(45);
+  if (!lines.length) lines = [...all].sort((a, b) => b.size - a.size);
 
   const seen = new Set();
   const picked = [];
@@ -928,7 +979,7 @@ function queryFromOcr(data) {
     if (seen.has(key)) continue;
     seen.add(key);
     picked.push(l.text);
-    if (picked.length === 4) break;
+    if (picked.length === 5) break;
   }
   return picked.join(' ').slice(0, 120);
 }
