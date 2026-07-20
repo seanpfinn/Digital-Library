@@ -317,29 +317,77 @@ html, body {
 }
 
 /* ---------- Add button ---------- */
-/* Liquid Glass CTA */
+/* ---------- Liquid Glass ----------
+   The header sits on white, so the glass reads through its edges rather than
+   through refraction: a bright specular rim along the top, a darker settling
+   edge at the bottom, and a soft cast shadow lifting it off the page. */
+.glass {
+  position: relative;
+  isolation: isolate;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  background:
+    linear-gradient(150deg,
+      rgba(255, 255, 255, 0.85) 0%,
+      rgba(255, 255, 255, 0.45) 42%,
+      rgba(255, 255, 255, 0.72) 100%),
+    rgba(240, 240, 244, 0.6);
+  backdrop-filter: blur(18px) saturate(185%);
+  -webkit-backdrop-filter: blur(18px) saturate(185%);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 6px 16px rgba(0, 0, 0, 0.09),
+    inset 0 1px 1px rgba(255, 255, 255, 0.95),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.055),
+    inset 0 0 12px rgba(255, 255, 255, 0.5);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+/* Glossy sheen across the top half */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(to bottom,
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.15) 45%,
+    rgba(255, 255, 255, 0) 60%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.glass:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.06),
+    0 10px 22px rgba(0, 0, 0, 0.12),
+    inset 0 1px 1px rgba(255, 255, 255, 1),
+    inset 0 -1px 2px rgba(0, 0, 0, 0.055),
+    inset 0 0 12px rgba(255, 255, 255, 0.6);
+}
+.glass:active {
+  transform: translateY(0);
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.06),
+    0 3px 8px rgba(0, 0, 0, 0.1),
+    inset 0 1px 3px rgba(0, 0, 0, 0.09),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.7);
+}
+
 .add-btn {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   height: 36px;
   padding: 0 21px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 29px;
-  background-image: linear-gradient(160.9deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.08) 100%);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
   color: #1d1d1f;
   font-family: 'Figtree', sans-serif;
   font-weight: 600;
   font-size: 14px;
   white-space: nowrap;
   cursor: pointer;
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.15);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-.add-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2); }
-.add-btn:active { transform: translateY(0); }
 
 /* ---------- Modal ---------- */
 .modal-backdrop {
