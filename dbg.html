@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-row">
+      <img class="logo" src="assets/logo.svg" alt="Digital Library" />
+      <div class="search" role="search">
+        <input id="searchInput" type="search" placeholder="Search by author, book, or genre"
+               aria-label="Search by author, book, or genre" autocomplete="off" />
+      </div>
+      <button class="add-btn glass" id="addBtn">Add book</button>
+    </div>
+
+    <div class="nav-row">
+      <nav class="tabs" id="tabsNav">
+        <button class="tab-link" data-tab="explore">Explore</button>
+        <button class="tab-link active" data-tab="collection">
+          Collection
+          <img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <button class="tab-link" data-tab="reading-list">Reading List</button>
+        <button class="tab-link" data-tab="settings">Settings</button>
+      </nav>
+
+      <div class="view-ctas" id="viewCtas" role="group" aria-label="View">
+        <button class="glass view-cta active" data-view="cover" aria-label="Cover view" title="Cover view" aria-pressed="true">
+          <img class="icon-on" src="assets/slideshow-on.svg" alt="" />
+          <img class="icon-off" src="assets/slideshow-off.svg" alt="" />
+        </button>
+        <button class="glass view-cta" data-view="list" aria-label="List view" title="List view" aria-pressed="false">
+          <img class="icon-on" src="assets/list-on.svg" alt="" />
+          <img class="icon-off" src="assets/list-off.svg" alt="" />
+        </button>
+        <button class="glass view-cta" data-view="grid" aria-label="Grid view" title="Grid view" aria-pressed="false">
+          <img class="icon-on" src="assets/grid-on.svg" alt="" />
+          <img class="icon-off" src="assets/grid-off.svg" alt="" />
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="coverflow" id="coverflow"></div>
+    <div class="book-meta" id="bookMeta">
+      <p class="book-title" id="bookTitle"></p>
+      <p class="book-author" id="bookAuthor"></p>
+    </div>
+  </main>
+
+  <section class="browse" id="browse" hidden>
+    <div class="browse-inner" id="browseInner"></div>
+    <p class="browse-empty" id="browseEmpty" hidden>No books match that search.</p>
+  </section>
+
+  <!-- Add-book modal -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add a book</h2>
+        <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist">
+        <button class="tab active" id="tabScan" role="tab" aria-selected="true">Scan ISBN</button>
+        <button class="tab" id="tabPhoto" role="tab" aria-selected="false">Photo of cover</button>
+      </div>
+
+      <div class="camera-wrap" id="cameraWrap">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <div class="scan-frame" id="scanFrame"></div>
+        <p class="camera-note" id="cameraNote">Point the camera at the barcode on the back of the book.</p>
+      </div>
+
+      <div class="camera-fallback" id="cameraFallback" hidden>
+        <p>Camera unavailable. Upload a photo instead:</p>
+        <input type="file" id="fileInput" accept="image/*" capture="environment" />
+      </div>
+
+      <div class="modal-actions" id="scanActions">
+        <div class="manual-isbn">
+          <input type="text" id="isbnInput" inputmode="numeric" placeholder="…or type the ISBN" />
+          <button class="btn secondary" id="isbnLookupBtn">Look up</button>
+        </div>
+      </div>
+
+      <div class="modal-actions" id="photoActions" hidden>
+        <button class="btn primary" id="captureBtn">Capture cover</button>
+      </div>
+
+      <div class="modal-status" id="modalStatus" hidden></div>
+
+      <!-- Confirmation card shown once a book is found / photographed -->
+      <div class="confirm-card" id="confirmCard" hidden>
+        <img id="confirmCover" alt="Book cover preview" />
+        <div class="confirm-fields">
+          <input type="text" id="confirmTitle" placeholder="Title" />
+          <input type="text" id="confirmAuthor" placeholder="Author" />
+          <div class="confirm-buttons">
+            <button class="btn secondary" id="retryBtn">Retry</button>
+            <button class="btn primary" id="confirmAddBtn">Add to library</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="captureCanvas" hidden></canvas>
+  <script src="app.js"></script>
+<script>
+window.addEventListener('load', () => setTimeout(() => {
+  const nav = document.querySelector('.nav-row').getBoundingClientRect();
+  const row1 = document.querySelector('.topbar-row').getBoundingClientRect();
+  const c = document.querySelector('.book[data-off="0"] .cover').getBoundingClientRect();
+  const meta = document.querySelector('.book-meta').getBoundingClientRect();
+  const all = [...document.querySelectorAll('.book .cover')].map(e=>e.getBoundingClientRect());
+  const left = Math.min(...all.map(r=>r.left)), right = Math.max(...all.map(r=>r.right));
+  document.title = `gapAbove ${(nav.top-row1.bottom).toFixed(0)} gapBelow ${(c.top-nav.bottom).toFixed(0)}`
+    + ` | titleGap ${(meta.top-c.bottom).toFixed(0)}`
+    + ` | coverH ${c.height.toFixed(0)} | metaBot ${meta.bottom.toFixed(0)}`
+    + ` | bleedL ${left.toFixed(0)} bleedR ${(right-innerWidth).toFixed(0)}`
+    + ` | vw ${innerWidth} vh ${innerHeight}`;
+}, 900));
+</script></body>
+</html>

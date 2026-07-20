@@ -86,8 +86,13 @@ function buildCoverflow() {
 
 function layout() {
   const isNarrow = window.innerWidth < 900;
-  const step = isNarrow ? 58 : 85;       // gap between stacked side covers
-  const firstOffset = isNarrow ? 142 : 240; // distance from center to first side cover
+  // Derived from the cover width so the flow stays in proportion at every
+  // breakpoint, and the outer covers bleed past the edge of the viewport.
+  const coverW = parseFloat(
+    getComputedStyle(document.documentElement).getPropertyValue('--cover-w')
+  );
+  const step = coverW * (isNarrow ? 0.28 : 0.335);       // gap between stacked side covers
+  const firstOffset = coverW * (isNarrow ? 0.68 : 0.95); // centre to first side cover
   const sideAngle = 42;
 
   const n = books.length;
