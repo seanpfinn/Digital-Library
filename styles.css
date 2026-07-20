@@ -110,17 +110,11 @@ html, body {
   justify-content: center;
   height: 36px;
   padding: 0 6px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 29px;
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.08) 100%);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.15);
   cursor: pointer;
-  transition: box-shadow 0.15s ease;
 }
-/* The chrome is identical in every state — only the icon swaps between
-   its filled (selected) and outline (unselected) variant. */
+/* State is carried by the icon — filled when selected, outline when not —
+   so the glass chrome itself stays identical across all three. */
 .view-cta img { width: 24px; height: 24px; display: block; }
 .view-cta .icon-on { display: none; }
 .view-cta.active .icon-on { display: block; }
