@@ -127,7 +127,22 @@ body {
   transition: color 0.15s ease;
 }
 .tab-link:hover { color: rgba(43, 43, 43, 0.8); }
-.tab-link.active { color: #2b2b2b; border-bottom-color: #004bec; }
+/* The underline is a single shared bar (.tab-indicator) that slides between
+   tabs, so the transparent border here only reserves its height. */
+.tab-link.active { color: #2b2b2b; }
+
+.tab-indicator {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 4px;
+  width: 0;
+  background: #004bec;
+  border-radius: 2px;
+  pointer-events: none;
+  transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+              width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
 .tab-caret { width: 24px; height: 24px; display: none; }
 
 /* View toggles */
@@ -848,4 +863,52 @@ body {
 @media (max-width: 900px) {
   .tab-menu { display: flex; }
   .tab-link.active { cursor: pointer; }
+}
+
+/* ---------- Cover-match candidates ---------- */
+.candidates { display: flex; flex-direction: column; gap: 10px; }
+.candidates-label {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #2b2b2b;
+}
+.candidate-list { display: flex; flex-direction: column; gap: 6px; }
+
+.candidate {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px;
+  border: 1.5px solid #eee;
+  border-radius: 12px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.candidate:hover { border-color: #004bec; background: #f7f9ff; }
+.candidate img {
+  width: 40px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 3px;
+  background: #eee;
+  flex-shrink: 0;
+}
+.candidate-text { min-width: 0; }
+.candidate-text strong {
+  display: block;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #1d1d1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.candidate-text span {
+  font-family: 'Figtree', sans-serif;
+  font-size: 13px;
+  color: #8d8d8d;
 }

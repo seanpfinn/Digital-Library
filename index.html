@@ -48,6 +48,7 @@
         <button class="tab-link" data-tab="settings" data-label="Settings">
           Settings<img class="tab-caret" src="assets/caret-down.svg" alt="" />
         </button>
+        <span class="tab-indicator" id="tabIndicator" aria-hidden="true"></span>
         <div class="tab-menu glass glass--static" id="tabMenu" role="menu" hidden></div>
       </nav>
 
@@ -133,6 +134,13 @@
 
       <div class="modal-status" id="modalStatus" hidden></div>
 
+      <!-- Matches found by reading the cover -->
+      <div class="candidates" id="candidates" hidden>
+        <p class="candidates-label">Best matches — pick the right one:</p>
+        <div class="candidate-list" id="candidateList"></div>
+        <button class="btn secondary" id="usePhotoBtn">None of these — use my photo</button>
+      </div>
+
       <!-- Confirmation card shown once a book is found / photographed -->
       <div class="confirm-card" id="confirmCard" hidden>
         <img id="confirmCover" alt="Book cover preview" />
@@ -149,6 +157,7 @@
   </div>
 
   <canvas id="captureCanvas" hidden></canvas>
+  <script src="assets/vendor/tesseract.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

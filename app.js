@@ -291,6 +291,28 @@ function shuttleBy(delta) {
   }, interval);
 }
 
+/* Collapse the shelf to the middle and let it fan back out, so returning to
+   cover view replays the same entrance the page opens with. */
+function replayShelf() {
+  const els = [...coverflowEl.querySelectorAll('.book')];
+
+  els.forEach((el) => {
+    el.style.transition = 'none';
+    el.style.transform = 'translateX(0) translateZ(-60px) rotateY(0deg) scaleY(0.97)';
+    delete el.dataset.off; // so layout() doesn't read this as a wrap and snap
+  });
+  void coverflowEl.offsetWidth; // flush the collapsed state before animating
+
+  els.forEach((el) => {
+    const abs = Math.abs(wrapOffset(Number(el.dataset.slot) - slotCursor));
+    el.style.transition = '';
+    el.style.transitionDelay = `${Math.min(abs * 45, 400)}ms`;
+  });
+  layout();
+
+  setTimeout(() => els.forEach((el) => { el.style.transitionDelay = ''; }), 1100);
+}
+
 /* Bring a specific rendered slot to the centre, travelling the short way. */
 function goToSlot(slot) {
   shuttleBy(wrapOffset(slot - slotCursor));
@@ -500,7 +522,7 @@ function setView(view) {
   const isCover = view === 'cover';
   stageEl.hidden = !isCover;
   browseEl.hidden = isCover;
-  if (isCover) layout();
+  if (isCover) replayShelf();
   else renderBrowse();
 }
 
@@ -519,6 +541,26 @@ function tabsCollapsed() {
   return window.innerWidth <= 900;
 }
 
+const tabIndicator = document.getElementById('tabIndicator');
+
+/* Slide the underline to sit beneath the active tab. */
+function moveTabIndicator({ animate = true } = {}) {
+  const active = tabLinks.find((t) => t.classList.contains('active'));
+  if (!active || !active.offsetParent) return; // nothing shown to measure
+
+  if (!animate) tabIndicator.style.transition = 'none';
+
+  const navLeft = tabsNav.getBoundingClientRect().left;
+  const rect = active.getBoundingClientRect();
+  tabIndicator.style.width = `${rect.width}px`;
+  tabIndicator.style.transform = `translateX(${rect.left - navLeft}px)`;
+
+  if (!animate) {
+    void tabIndicator.offsetWidth; // commit before re-enabling the transition
+    tabIndicator.style.transition = '';
+  }
+}
+
 function setActiveTab(tab) {
   tabLinks.forEach((t) => {
     const on = t.dataset.tab === tab;
@@ -526,7 +568,15 @@ function setActiveTab(tab) {
     if (on) t.setAttribute('aria-haspopup', 'menu');
     else t.removeAttribute('aria-haspopup');
   });
+  moveTabIndicator();
 }
+
+/* Fonts land after first paint and change tab widths, so measure again. */
+window.addEventListener('load', () => moveTabIndicator({ animate: false }));
+if (document.fonts) {
+  document.fonts.ready.then(() => moveTabIndicator({ animate: false }));
+}
+window.addEventListener('resize', () => moveTabIndicator({ animate: false }));
 
 function buildTabMenu() {
   tabMenu.innerHTML = '';
@@ -823,52 +873,197 @@ isbnInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') isbnLookupBtn.click();
 });
 
-/* ---------- Photo capture ---------- */
+/* ---------- Identifying a book from a photograph ---------- */
 
-captureBtn.addEventListener('click', () => {
-  const canvas = grabFrame({ cropPortrait: true });
-  if (!canvas) {
-    setStatus('Camera is not ready yet — give it a second.', true);
-    return;
-  }
-  showConfirm({
-    title: '',
-    author: '',
-    coverSrc: canvas.toDataURL('image/jpeg', 0.85),
-    needsTitle: true,
+const candidatesEl = document.getElementById('candidates');
+const candidateListEl = document.getElementById('candidateList');
+const usePhotoBtn = document.getElementById('usePhotoBtn');
+
+/* Tesseract is ~6MB of wasm and language data, so it is fetched from
+   assets/vendor only the first time a cover actually needs reading. */
+let ocrWorker = null;
+async function getOcrWorker() {
+  if (ocrWorker) return ocrWorker;
+  if (typeof Tesseract === 'undefined') throw new Error('OCR library unavailable');
+  ocrWorker = await Tesseract.createWorker('eng', 1, {
+    workerPath: 'assets/vendor/worker.min.js',
+    corePath: 'assets/vendor/tesseract-core-simd.wasm.js',
+    langPath: 'assets/vendor',
   });
+  return ocrWorker;
+}
+
+/* Tesseract v5 reports lines under blocks; older shapes expose data.lines. */
+function ocrLines(data) {
+  if (Array.isArray(data.lines) && data.lines.length) return data.lines;
+  const out = [];
+  (data.blocks || []).forEach((b) =>
+    (b.paragraphs || []).forEach((p) => (p.lines || []).forEach((l) => out.push(l)))
+  );
+  return out;
+}
+
+/* Cover furniture that is never part of the title. */
+const COVER_BLURB =
+  /(new york times|bestseller|best seller|copies sold|author of|million|instant|national|award|winner|edition|foreword|introduction|www\.|\.com|publish)/i;
+
+/* Rank lines by how big the type is, not how long the line is: on a book
+   cover the title is set largest, while the longest lines are usually
+   review blurbs and sales copy. */
+function queryFromOcr(data) {
+  const lines = ocrLines(data)
+    .map((l) => ({
+      text: (l.text || '').replace(/[^A-Za-z0-9'’&:\- ]/g, ' ').replace(/\s+/g, ' ').trim(),
+      size: l.bbox ? l.bbox.y1 - l.bbox.y0 : 0,
+    }))
+    .filter((l) => l.text.length >= 3 && /[A-Za-z]{3}/.test(l.text))
+    .filter((l) => !COVER_BLURB.test(l.text));
+
+  lines.sort((a, b) => b.size - a.size);
+
+  const seen = new Set();
+  const picked = [];
+  for (const l of lines) {
+    const key = l.text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    picked.push(l.text);
+    if (picked.length === 4) break;
+  }
+  return picked.join(' ').slice(0, 120);
+}
+
+async function searchOpenLibrary(query) {
+  const url =
+    'https://openlibrary.org/search.json?q=' +
+    encodeURIComponent(query) +
+    '&fields=title,author_name,cover_i,first_publish_year&limit=6';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Search failed');
+  const data = await res.json();
+  return (data.docs || []).filter((d) => d.cover_i);
+}
+
+function showCandidates(matches, photoSrc) {
+  pendingCoverSrc = photoSrc; // kept for the "use my photo" fallback
+  candidateListEl.innerHTML = '';
+
+  matches.forEach((m) => {
+    const btn = document.createElement('button');
+    btn.className = 'candidate';
+    btn.type = 'button';
+
+    const img = document.createElement('img');
+    img.src = `https://covers.openlibrary.org/b/id/${m.cover_i}-M.jpg`;
+    img.alt = '';
+
+    const text = document.createElement('div');
+    text.className = 'candidate-text';
+    const t = document.createElement('strong');
+    t.textContent = m.title;
+    const a = document.createElement('span');
+    a.textContent = [m.author_name?.[0], m.first_publish_year].filter(Boolean).join(' · ');
+    text.append(t, a);
+
+    btn.append(img, text);
+    btn.addEventListener('click', () => {
+      candidatesEl.hidden = true;
+      showConfirm({
+        title: m.title,
+        author: m.author_name?.[0] || '',
+        // Prefer the publisher's artwork over the photograph
+        coverSrc: `https://covers.openlibrary.org/b/id/${m.cover_i}-L.jpg`,
+      });
+    });
+    candidateListEl.appendChild(btn);
+  });
+
+  candidatesEl.hidden = false;
+}
+
+usePhotoBtn.addEventListener('click', () => {
+  candidatesEl.hidden = true;
+  showConfirm({ title: '', author: '', coverSrc: pendingCoverSrc, needsTitle: true });
 });
 
-/* File-upload fallback: try to read a barcode from it, else use it as the cover */
-fileInput.addEventListener('change', async () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
-  setStatus('Reading photo…');
-  const bitmap = await createImageBitmap(file);
+/* Barcode first (exact), then read the cover text and search for a match. */
+async function identify(source, photoSrc) {
+  hideConfirm();
+  candidatesEl.hidden = true;
+  pendingCoverSrc = photoSrc;
 
   const detector = await getBarcodeDetector();
   if (detector) {
     try {
-      const codes = await detector.detect(bitmap);
+      const codes = await detector.detect(source);
       const isbn = codes.map((c) => c.rawValue).find((v) => /^97[89]\d{10}$/.test(v));
       if (isbn) {
         await lookupAndConfirm(isbn);
         return;
       }
-    } catch { /* fall through to cover mode */ }
+    } catch { /* no barcode in frame — fall through to reading the cover */ }
   }
 
-  // No barcode found — use the photo as the cover
-  const scale = Math.min(1, 500 / bitmap.width);
+  setStatus('Reading the cover…');
+  let query = '';
+  try {
+    const worker = await getOcrWorker();
+    // blocks:true gives per-line bounding boxes, which is how type size is read
+    const { data } = await worker.recognize(source, {}, { text: true, blocks: true });
+    query = queryFromOcr(data);
+  } catch (err) {
+    console.warn('OCR failed:', err);
+  }
+
+  if (!query) {
+    setStatus("Couldn't read any text on that cover. Add the details yourself.", true);
+    showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+    return;
+  }
+
+  setStatus(`Looking up “${query.slice(0, 48)}”…`);
+  try {
+    const matches = await searchOpenLibrary(query);
+    if (!matches.length) {
+      setStatus('No match found for that cover. Add the details yourself.', true);
+      showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+      return;
+    }
+    setStatus('');
+    showCandidates(matches, photoSrc);
+  } catch (err) {
+    console.warn(err);
+    setStatus('Search is unavailable right now. Add the details yourself.', true);
+    showConfirm({ title: '', author: '', coverSrc: photoSrc, needsTitle: true });
+  }
+}
+
+captureBtn.addEventListener('click', async () => {
+  const canvas = grabFrame({ cropPortrait: true });
+  if (!canvas) {
+    setStatus('Camera is not ready yet — give it a second.', true);
+    return;
+  }
+  captureBtn.disabled = true;
+  try {
+    await identify(canvas, canvas.toDataURL('image/jpeg', 0.85));
+  } finally {
+    captureBtn.disabled = false;
+  }
+});
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+  setStatus('Reading photo…');
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 900 / bitmap.width);
   captureCanvas.width = Math.round(bitmap.width * scale);
   captureCanvas.height = Math.round(bitmap.height * scale);
   captureCanvas.getContext('2d').drawImage(bitmap, 0, 0, captureCanvas.width, captureCanvas.height);
-  showConfirm({
-    title: '',
-    author: '',
-    coverSrc: captureCanvas.toDataURL('image/jpeg', 0.85),
-    needsTitle: true,
-  });
+
+  await identify(captureCanvas, captureCanvas.toDataURL('image/jpeg', 0.85));
 });
 
 /* ---------- Confirm & add ---------- */
