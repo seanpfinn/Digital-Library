@@ -22,6 +22,11 @@ Then open <http://localhost:8734>.
 - **Three views** — the toggles at the right of the nav row switch between cover
   flow, list, and grid. Clicking any book in list/grid jumps to it in the flow.
 - **Search** — filters the list and grid; in cover view it jumps to the first match.
+- **Detail tray** — clicking the centre cover (or any book in list/grid) slides a
+  glass tray up with the synopsis and links to buy or borrow. Dismiss with the
+  grip, the scrim, Escape, or by swiping it down. The retailer links are
+  *searches* built from title + author, not hardcoded product pages, so they
+  don't rot or land on the wrong edition.
 - **Add book** (header button):
   - **Scan ISBN** — point the camera at the barcode on the back of a book; the
     ISBN is detected live (Chrome/Edge; other browsers can type the ISBN) and the

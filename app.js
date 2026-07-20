@@ -3,15 +3,78 @@
 /* ============================== Data ============================== */
 
 const DEFAULT_BOOKS = [
-  { id: 'hooked', title: 'Hooked: How to Build Habit-Forming Products', author: 'Nir Eyal', cover: 'covers/hooked.jpg' },
-  { id: 'cold-start-problem', title: 'The Cold Start Problem', author: 'Andrew Chen', cover: 'covers/cold-start-problem.jpg' },
-  { id: 'atomic-habits', title: 'Atomic Habits', author: 'James Clear', cover: 'covers/atomic-habits.jpg' },
-  { id: 'creative-act', title: 'The Creative Act: A Way of Being', author: 'Rick Rubin', cover: 'covers/creative-act.jpg' },
-  { id: 'inspired', title: 'Inspired: How to Create Tech Products Customers Love', author: 'Marty Cagan', cover: 'covers/inspired.jpg' },
-  { id: 'build', title: 'Build: An Unorthodox Guide to Making Things Worth Making', author: 'Tony Fadell', cover: 'covers/build.jpg' },
-  { id: 'user-friendly', title: 'User Friendly', author: 'Cliff Kuang', cover: 'covers/user-friendly.jpg' },
-  { id: 'designing-your-life', title: 'Designing Your Life', author: 'Bill Burnett & Dave Evans', cover: 'covers/designing-your-life.jpg' },
-  { id: 'indistractable', title: 'Indistractable: How to Control Your Attention', author: 'Nir Eyal', cover: 'covers/indistractable.jpg' },
+  {
+    id: 'hooked',
+    title: 'Hooked: How to Build Habit-Forming Products',
+    author: 'Nir Eyal',
+    cover: 'covers/hooked.jpg',
+    synopsis:
+      'Eyal lays out the Hook Model — trigger, action, variable reward, investment — a four-step cycle that explains why some products become part of daily routine while others are opened once and forgotten. Equal parts behavioural psychology and practical playbook, with a closing chapter on the ethics of designing for habit.',
+  },
+  {
+    id: 'cold-start-problem',
+    title: 'The Cold Start Problem',
+    author: 'Andrew Chen',
+    cover: 'covers/cold-start-problem.jpg',
+    synopsis:
+      'Network products are worthless until enough people use them — so how does anyone get past the empty room? Drawing on his time at Uber and a16z, Chen argues for building small "atomic networks" that work on their own, then charting the path through tipping point, escape velocity, and the ceilings that follow.',
+  },
+  {
+    id: 'atomic-habits',
+    title: 'Atomic Habits',
+    author: 'James Clear',
+    cover: 'covers/atomic-habits.jpg',
+    synopsis:
+      'Clear\'s case is that tiny changes compound: get one percent better each day and the results are dramatic over a year. Built around four laws of behaviour change — make it obvious, attractive, easy, and satisfying — and a central argument that you should build systems rather than set goals.',
+  },
+  {
+    id: 'creative-act',
+    title: 'The Creative Act: A Way of Being',
+    author: 'Rick Rubin',
+    cover: 'covers/creative-act.jpg',
+    synopsis:
+      'Less a manual than a set of meditations. Across dozens of short chapters, the legendary producer treats creativity as a way of paying attention rather than a skill reserved for artists — covering sources, experimentation, self-doubt, and knowing when a work is finished.',
+  },
+  {
+    id: 'inspired',
+    title: 'Inspired: How to Create Tech Products Customers Love',
+    author: 'Marty Cagan',
+    cover: 'covers/inspired.jpg',
+    synopsis:
+      'Cagan\'s account of how the strongest product teams actually work: how they are staffed, how product managers, designers, and engineers collaborate, and the discovery techniques they use to find something worth building before committing to build it. A widely used reference for modern product management.',
+  },
+  {
+    id: 'build',
+    title: 'Build: An Unorthodox Guide to Making Things Worth Making',
+    author: 'Tony Fadell',
+    cover: 'covers/build.jpg',
+    synopsis:
+      'Part memoir, part hard-won advice from the man behind the iPod, the iPhone, and Nest. Fadell writes in short, blunt chapters about building products, managing teams, choosing a job, raising money, and the messy reality of shipping things people care about.',
+  },
+  {
+    id: 'user-friendly',
+    title: 'User Friendly',
+    author: 'Cliff Kuang',
+    cover: 'covers/user-friendly.jpg',
+    synopsis:
+      'A history of how user-centred design quietly reshaped the modern world, from Three Mile Island control panels to the smartphone. Kuang and Fabricant trace how designers learned to treat human error as a design failure rather than a human one.',
+  },
+  {
+    id: 'designing-your-life',
+    title: 'Designing Your Life',
+    author: 'Bill Burnett & Dave Evans',
+    cover: 'covers/designing-your-life.jpg',
+    synopsis:
+      'Two Stanford design professors apply design thinking to the question of what to do with your life. Rather than searching for one true calling, they suggest reframing unhelpful beliefs, prototyping several possible lives, and testing them through conversations and small experiments.',
+  },
+  {
+    id: 'indistractable',
+    title: 'Indistractable: How to Control Your Attention',
+    author: 'Nir Eyal',
+    cover: 'covers/indistractable.jpg',
+    synopsis:
+      'A counterweight to his own Hooked. Eyal argues distraction begins with internal discomfort rather than technology, and offers tactics for handling those triggers, timeboxing your day, defusing external interruptions, and making pacts that keep you honest.',
+  },
 ];
 
 const STORAGE_KEY = 'digital-library-custom-books';
@@ -132,7 +195,11 @@ function buildCoverflow() {
 
     el.appendChild(cover);
     el.appendChild(reflection);
-    el.addEventListener('click', () => goToSlot(slot));
+    // A side cover steps the shelf along; the centre one opens its details.
+    el.addEventListener('click', () => {
+      if (wrapOffset(slot - slotCursor) === 0) openTray(books[slot % n]);
+      else goToSlot(slot);
+    });
     coverflowEl.appendChild(el);
   }
   layout();
@@ -200,7 +267,7 @@ function selectBook(bookIndex) {
 
 /* Keyboard */
 document.addEventListener('keydown', (e) => {
-  if (!modalBackdrop.hidden) return;
+  if (!modalBackdrop.hidden || !trayEl.hidden) return;
   if (currentView !== 'cover') return;
   if (e.target.tagName === 'INPUT') return; // don't hijack arrows while typing
   if (e.key === 'ArrowLeft') nudge(-1);
@@ -251,6 +318,82 @@ window.addEventListener('resize', () => {
   else layout();
 });
 
+/* ============================== Book detail tray ============================== */
+
+const trayEl = document.getElementById('tray');
+const trayScrim = document.getElementById('trayScrim');
+const trayCover = document.getElementById('trayCover');
+const trayTitle = document.getElementById('trayTitle');
+const trayAuthor = document.getElementById('trayAuthor');
+const traySynopsis = document.getElementById('traySynopsis');
+const trayCtas = document.getElementById('trayCtas');
+
+/* Search links rather than direct product URLs — a search always resolves,
+   where a hardcoded product id would rot or point at the wrong edition. */
+const RETAILERS = [
+  { label: 'Buy on Amazon', primary: true, url: (q) => `https://www.amazon.com/s?k=${q}&i=stripbooks` },
+  { label: 'Apple Books', url: (q) => `https://books.apple.com/us/search?term=${q}` },
+  { label: 'Bookshop.org', url: (q) => `https://bookshop.org/search?keywords=${q}` },
+  { label: 'Borrow on Open Library', url: (q) => `https://openlibrary.org/search?q=${q}` },
+];
+
+function openTray(book) {
+  trayCover.src = coverSrc(book);
+  trayCover.alt = `${book.title} cover`;
+  trayTitle.textContent = book.title;
+  trayAuthor.textContent = book.author;
+  traySynopsis.textContent = book.synopsis || 'No synopsis saved for this book yet.';
+
+  const query = encodeURIComponent(`${book.title} ${book.author}`.trim());
+  trayCtas.innerHTML = '';
+  RETAILERS.forEach((r) => {
+    const a = document.createElement('a');
+    a.className = `glass tray-cta${r.primary ? ' primary' : ''}`;
+    a.href = r.url(query);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = r.label;
+    trayCtas.appendChild(a);
+  });
+
+  trayEl.hidden = false;
+  trayScrim.hidden = false;
+  // Next frame, so the slide-up transition has a starting position to run from.
+  requestAnimationFrame(() => {
+    trayEl.classList.add('open');
+    trayScrim.classList.add('open');
+  });
+}
+
+function closeTray() {
+  if (trayEl.hidden) return;
+  trayEl.classList.remove('open');
+  trayScrim.classList.remove('open');
+  const done = () => {
+    trayEl.hidden = true;
+    trayScrim.hidden = true;
+  };
+  trayEl.addEventListener('transitionend', done, { once: true });
+  setTimeout(done, 500); // in case the transition never fires
+}
+
+document.getElementById('trayGrip').addEventListener('click', closeTray);
+trayScrim.addEventListener('click', closeTray);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTray();
+});
+
+/* Swipe the tray down to dismiss it. */
+let trayDragY = null;
+trayEl.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('a')) return;
+  trayDragY = e.clientY;
+});
+trayEl.addEventListener('pointerup', (e) => {
+  if (trayDragY !== null && e.clientY - trayDragY > 60) closeTray();
+  trayDragY = null;
+});
+
 /* ============================== Views, tabs & search ============================== */
 
 const stageEl = document.getElementById('stage');
@@ -295,10 +438,10 @@ function renderBrowse() {
     text.append(title, author);
 
     item.append(img, text);
-    // Jump to this book in the cover flow
+    // Centre it on the shelf behind us, and show its details
     item.addEventListener('click', () => {
       selectBook(books.indexOf(book));
-      setView('cover');
+      openTray(book);
     });
     browseInner.appendChild(item);
   });
