@@ -387,7 +387,8 @@ body {
   z-index: -1;
 }
 
-.glass:hover {
+/* Panels opt out of the lift with .glass--static; only controls react. */
+.glass:not(.glass--static):hover {
   transform: translateY(-1px);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.06),
@@ -396,7 +397,7 @@ body {
     inset 0 -1px 2px rgba(0, 0, 0, 0.055),
     inset 0 0 12px rgba(255, 255, 255, 0.6);
 }
-.glass:active {
+.glass:not(.glass--static):active {
   transform: translateY(0);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06),
@@ -653,8 +654,6 @@ body {
     inset 0 0 20px rgba(255, 255, 255, 0.5);
 }
 .tray.open { transform: translate(-50%, 0); }
-.tray:hover { transform: translate(-50%, 100%); } /* neutralise .glass hover lift */
-.tray.open:hover { transform: translate(-50%, 0); }
 
 /* Drag-handle affordance, doubles as a close button */
 .tray-grip {
@@ -739,12 +738,6 @@ body {
     inset 0 1px 1px rgba(255, 255, 255, 0.5);
 }
 
-.tray-note {
-  margin-top: 12px;
-  font-family: 'Figtree', sans-serif;
-  font-size: 12px;
-  color: #9a9aa2;
-}
 
 @media (max-width: 900px) {
   .tray { width: 100%; padding: 12px 20px 24px; border-radius: 22px 22px 0 0; }
@@ -754,4 +747,105 @@ body {
   .tray-synopsis { font-size: 14px; margin-top: 10px; }
   .tray-ctas { gap: 6px; margin-top: 16px; }
   .tray-cta { height: 36px; padding: 0 14px; font-size: 13px; }
+}
+
+/* ---------- Entrance motion ----------
+   Everything except the shelf eases in. The carousel keeps its own transform
+   transition, so its movement is untouched.
+   fill-mode is `backwards`, not `both`: the first keyframe holds during the
+   delay, but once the run finishes the element returns to its normal styles,
+   so hover lifts and other transforms still work afterwards. */
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.logo,
+.search,
+.add-btn,
+.tab-link,
+.view-cta,
+.book-meta {
+  animation: rise-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+/* Staggered so the header assembles left to right, then the nav row */
+.logo      { animation-delay: 0.04s; }
+.search    { animation-delay: 0.10s; }
+.add-btn   { animation-delay: 0.16s; }
+.tab-link:nth-of-type(1) { animation-delay: 0.22s; }
+.tab-link:nth-of-type(2) { animation-delay: 0.27s; }
+.tab-link:nth-of-type(3) { animation-delay: 0.32s; }
+.tab-link:nth-of-type(4) { animation-delay: 0.37s; }
+.view-cta:nth-of-type(1) { animation-delay: 0.30s; }
+.view-cta:nth-of-type(2) { animation-delay: 0.35s; }
+.view-cta:nth-of-type(3) { animation-delay: 0.40s; }
+.book-meta { animation-delay: 0.46s; }
+
+/* Title and author cross-fade when the shelf lands on a new book */
+.book-meta.swap { animation: fade-in 0.4s ease backwards; }
+
+/* List and grid tiles ease in; the delay is set per item in app.js */
+.browse-item { animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
+/* Add-book modal */
+.modal-backdrop { animation: fade-in 0.22s ease backwards; }
+.modal { animation: rise-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+
+/* Respect a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Mobile tab dropdown ---------- */
+.tabs { position: relative; }
+
+.tab-menu {
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 0;
+  min-width: 240px;
+  padding: 8px;
+  border-radius: 22px;
+  z-index: 80;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+  transform-origin: top left;
+  transition: opacity 0.2s ease, transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tab-menu.open { opacity: 1; transform: translateY(0) scale(1); }
+
+.tab-menu button {
+  width: 100%;
+  text-align: left;
+  padding: 11px 16px;
+  border: none;
+  background: none;
+  border-radius: 14px;
+  font-family: 'Geist Mono', monospace;
+  font-weight: 400;
+  font-size: 17px;
+  color: #2b2b2b;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tab-menu button:hover { background: rgba(255, 255, 255, 0.55); }
+.tab-menu button.current { color: #004bec; }
+
+/* Only phones collapse the tabs into a menu. */
+@media (max-width: 900px) {
+  .tab-menu { display: flex; }
+  .tab-link.active { cursor: pointer; }
 }

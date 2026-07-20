@@ -105,6 +105,7 @@ let slotCursor = Math.max(0, books.findIndex((b) => b.id === 'inspired'));
 /* ============================== Cover Flow ============================== */
 
 const coverflowEl = document.getElementById('coverflow');
+const bookMetaEl = document.getElementById('bookMeta');
 const bookTitleEl = document.getElementById('bookTitle');
 const bookAuthorEl = document.getElementById('bookAuthor');
 
@@ -237,8 +238,14 @@ function layout() {
   });
 
   const book = books[currentBookIndex()];
-  bookTitleEl.textContent = book.title;
-  bookAuthorEl.textContent = book.author;
+  if (bookTitleEl.textContent !== book.title) {
+    bookTitleEl.textContent = book.title;
+    bookAuthorEl.textContent = book.author;
+    // Restart the cross-fade: drop the class, force a reflow, re-add it.
+    bookMetaEl.classList.remove('swap');
+    void bookMetaEl.offsetWidth;
+    bookMetaEl.classList.add('swap');
+  }
 }
 
 function setCursor(c) {
@@ -248,13 +255,45 @@ function setCursor(c) {
 
 /* Move by whole positions along the shelf. */
 function nudge(delta) {
+  cancelShuttle();
   setCursor(slotCursor + delta);
+}
+
+/* Travel to a target one position at a time, so the shelf visibly shuttles
+   through the books in between rather than teleporting past them. Each step
+   interrupts the previous CSS transition, which blends them into one glide. */
+let shuttleTimer = null;
+
+function cancelShuttle() {
+  if (shuttleTimer) {
+    clearInterval(shuttleTimer);
+    shuttleTimer = null;
+  }
+}
+
+function shuttleBy(delta) {
+  cancelShuttle();
+  if (delta === 0) return;
+
+  const dir = Math.sign(delta);
+  let remaining = Math.abs(delta);
+
+  // Longer journeys move faster per book, so crossing the shelf stays brisk.
+  const interval = remaining > 4 ? 85 : remaining > 2 ? 110 : 150;
+
+  setCursor(slotCursor + dir);
+  remaining--;
+  if (remaining === 0) return;
+
+  shuttleTimer = setInterval(() => {
+    setCursor(slotCursor + dir);
+    if (--remaining <= 0) cancelShuttle();
+  }, interval);
 }
 
 /* Bring a specific rendered slot to the centre, travelling the short way. */
 function goToSlot(slot) {
-  const delta = wrapOffset(slot - slotCursor);
-  if (delta !== 0) setCursor(slotCursor + delta);
+  shuttleBy(wrapOffset(slot - slotCursor));
 }
 
 /* Bring a specific book to the centre, travelling the short way. */
@@ -262,7 +301,7 @@ function selectBook(bookIndex) {
   const n = books.length;
   let delta = (((bookIndex - currentBookIndex()) % n) + n) % n;
   if (delta > n / 2) delta -= n;
-  setCursor(slotCursor + delta);
+  shuttleBy(delta);
 }
 
 /* Keyboard */
@@ -299,6 +338,7 @@ let dragStartIndex = 0;
 const stage = document.getElementById('stage');
 
 stage.addEventListener('pointerdown', (e) => {
+  cancelShuttle(); // a drag takes over from any in-flight travel
   dragStartX = e.clientX;
   dragStartIndex = slotCursor;
 });
@@ -419,9 +459,11 @@ function renderBrowse() {
   browseInner.innerHTML = '';
   browseEmpty.hidden = list.length > 0;
 
-  list.forEach((book) => {
+  list.forEach((book, i) => {
     const item = document.createElement('div');
     item.className = 'browse-item';
+    // Cascade the tiles in, capped so a long shelf doesn't crawl.
+    item.style.animationDelay = `${Math.min(i * 40, 480)}ms`;
 
     const img = document.createElement('img');
     img.src = coverSrc(book);
@@ -467,11 +509,81 @@ document.getElementById('viewCtas').addEventListener('click', (e) => {
   if (btn) setView(btn.dataset.view);
 });
 
-document.getElementById('tabsNav').addEventListener('click', (e) => {
+/* ---------- Tabs, and the dropdown they collapse into on mobile ---------- */
+
+const tabsNav = document.getElementById('tabsNav');
+const tabMenu = document.getElementById('tabMenu');
+const tabLinks = [...document.querySelectorAll('.tab-link')];
+
+function tabsCollapsed() {
+  return window.innerWidth <= 900;
+}
+
+function setActiveTab(tab) {
+  tabLinks.forEach((t) => {
+    const on = t.dataset.tab === tab;
+    t.classList.toggle('active', on);
+    if (on) t.setAttribute('aria-haspopup', 'menu');
+    else t.removeAttribute('aria-haspopup');
+  });
+}
+
+function buildTabMenu() {
+  tabMenu.innerHTML = '';
+  tabLinks.forEach((link) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.setAttribute('role', 'menuitem');
+    item.textContent = link.dataset.label;
+    item.classList.toggle('current', link.classList.contains('active'));
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      setActiveTab(link.dataset.tab);
+      closeTabMenu();
+    });
+    tabMenu.appendChild(item);
+  });
+}
+
+function openTabMenu() {
+  buildTabMenu();
+  tabMenu.hidden = false;
+  requestAnimationFrame(() => tabMenu.classList.add('open'));
+  tabLinks.forEach((t) => {
+    if (t.classList.contains('active')) t.setAttribute('aria-expanded', 'true');
+  });
+}
+
+function closeTabMenu() {
+  if (tabMenu.hidden) return;
+  tabMenu.classList.remove('open');
+  const done = () => { tabMenu.hidden = true; };
+  tabMenu.addEventListener('transitionend', done, { once: true });
+  setTimeout(done, 400);
+  tabLinks.forEach((t) => t.setAttribute('aria-expanded', 'false'));
+}
+
+tabsNav.addEventListener('click', (e) => {
   const btn = e.target.closest('.tab-link');
   if (!btn) return;
-  document.querySelectorAll('.tab-link').forEach((t) => t.classList.remove('active'));
-  btn.classList.add('active');
+  e.stopPropagation();
+  // Collapsed, only the current tab is on screen — so tapping it opens the menu.
+  if (tabsCollapsed() && btn.classList.contains('active')) {
+    if (tabMenu.hidden) openTabMenu();
+    else closeTabMenu();
+    return;
+  }
+  setActiveTab(btn.dataset.tab);
+});
+
+document.addEventListener('click', (e) => {
+  if (!tabMenu.hidden && !tabMenu.contains(e.target)) closeTabMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeTabMenu();
+});
+window.addEventListener('resize', () => {
+  if (!tabsCollapsed()) closeTabMenu();
 });
 
 /* In cover view, searching jumps to the first match; elsewhere it filters. */

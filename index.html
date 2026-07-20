@@ -36,13 +36,19 @@
 
     <div class="nav-row">
       <nav class="tabs" id="tabsNav">
-        <button class="tab-link" data-tab="explore">Explore</button>
-        <button class="tab-link active" data-tab="collection">
-          Collection
-          <img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        <button class="tab-link" data-tab="explore" data-label="Explore">
+          Explore<img class="tab-caret" src="assets/caret-down.svg" alt="" />
         </button>
-        <button class="tab-link" data-tab="reading-list">Reading List</button>
-        <button class="tab-link" data-tab="settings">Settings</button>
+        <button class="tab-link active" data-tab="collection" data-label="Collection" aria-haspopup="menu" aria-expanded="false">
+          Collection<img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <button class="tab-link" data-tab="list" data-label="List">
+          List<img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <button class="tab-link" data-tab="settings" data-label="Settings">
+          Settings<img class="tab-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <div class="tab-menu glass glass--static" id="tabMenu" role="menu" hidden></div>
       </nav>
 
       <div class="view-ctas" id="viewCtas" role="group" aria-label="View">
@@ -72,7 +78,7 @@
 
   <!-- Book detail tray -->
   <div class="tray-scrim" id="trayScrim" hidden></div>
-  <aside class="tray glass" id="tray" role="dialog" aria-modal="true" aria-labelledby="trayTitle" hidden>
+  <aside class="tray glass glass--static" id="tray" role="dialog" aria-modal="true" aria-labelledby="trayTitle" hidden>
     <button class="tray-grip" id="trayGrip" aria-label="Close details"></button>
     <div class="tray-body">
       <img class="tray-cover" id="trayCover" alt="" />
@@ -81,7 +87,6 @@
         <p class="tray-author" id="trayAuthor"></p>
         <p class="tray-synopsis" id="traySynopsis"></p>
         <div class="tray-ctas" id="trayCtas"></div>
-        <p class="tray-note">Opens a search on the retailer's site.</p>
       </div>
     </div>
   </aside>
