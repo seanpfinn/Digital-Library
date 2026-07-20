@@ -32,9 +32,14 @@ Then open <http://localhost:8734>.
     ISBN is detected live (Chrome/Edge; other browsers can type the ISBN) and the
     title, author, and cover art are fetched from Open Library.
   - **Photo of cover** — snap the front cover and it is *identified*: the text
-    is read on-device with Tesseract, searched against Open Library, and you
-    pick from the matches. The publisher's artwork and metadata are used, not
-    your photo. Falls back to manual entry with your photo if nothing matches.
+    is read on-device with Tesseract and searched against Open Library. The
+    modal then shows a **confirmation** of the matched book with its hi-res
+    publisher artwork — "Is this your book?" — before anything is added. The
+    photo is only a reference; the book is stored with the catalogue cover and
+    metadata, never the snapshot. "Not the right book" reveals the other
+    matches; if none fit, you fall back to manual entry with your photo.
+  - Every failure (unreadable cover, no match, network down, bad ISBN) lands on
+    a single tasteful **error state** with a retry and a manual-entry option.
 - **Remove a book** — open its tray and use *Remove from library* (tap twice to
   confirm). Removing a built-in book is remembered across reloads.
   - If no camera is available, an image-upload fallback appears (it also tries
