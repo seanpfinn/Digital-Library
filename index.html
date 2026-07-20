@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <img class="logo" src="assets/logo.svg" alt="Digital Library" />
+    <div class="library-pill">Library</div>
+  </header>
+
+  <main class="stage" id="stage">
+    <div class="coverflow" id="coverflow"></div>
+    <div class="book-meta" id="bookMeta">
+      <p class="book-title" id="bookTitle"></p>
+      <p class="book-author" id="bookAuthor"></p>
+    </div>
+  </main>
+
+  <button class="add-btn" id="addBtn" title="Add a book">
+    <svg width="22" height="22" viewBox="0 0 22 22" fill="none" aria-hidden="true">
+      <path d="M11 3v16M3 11h16" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    <span>Add book</span>
+  </button>
+
+  <!-- Add-book modal -->
+  <div class="modal-backdrop" id="modalBackdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 id="modalTitle">Add a book</h2>
+        <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+      </div>
+
+      <div class="modal-tabs" role="tablist">
+        <button class="tab active" id="tabScan" role="tab" aria-selected="true">Scan ISBN</button>
+        <button class="tab" id="tabPhoto" role="tab" aria-selected="false">Photo of cover</button>
+      </div>
+
+      <div class="camera-wrap" id="cameraWrap">
+        <video id="camVideo" autoplay playsinline muted></video>
+        <div class="scan-frame" id="scanFrame"></div>
+        <p class="camera-note" id="cameraNote">Point the camera at the barcode on the back of the book.</p>
+      </div>
+
+      <div class="camera-fallback" id="cameraFallback" hidden>
+        <p>Camera unavailable. Upload a photo instead:</p>
+        <input type="file" id="fileInput" accept="image/*" capture="environment" />
+      </div>
+
+      <div class="modal-actions" id="scanActions">
+        <div class="manual-isbn">
+          <input type="text" id="isbnInput" inputmode="numeric" placeholder="…or type the ISBN" />
+          <button class="btn secondary" id="isbnLookupBtn">Look up</button>
+        </div>
+      </div>
+
+      <div class="modal-actions" id="photoActions" hidden>
+        <button class="btn primary" id="captureBtn">Capture cover</button>
+      </div>
+
+      <div class="modal-status" id="modalStatus" hidden></div>
+
+      <!-- Confirmation card shown once a book is found / photographed -->
+      <div class="confirm-card" id="confirmCard" hidden>
+        <img id="confirmCover" alt="Book cover preview" />
+        <div class="confirm-fields">
+          <input type="text" id="confirmTitle" placeholder="Title" />
+          <input type="text" id="confirmAuthor" placeholder="Author" />
+          <div class="confirm-buttons">
+            <button class="btn secondary" id="retryBtn">Retry</button>
+            <button class="btn primary" id="confirmAddBtn">Add to library</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="captureCanvas" hidden></canvas>
+  <script src="app.js"></script>
+</body>
+</html>
