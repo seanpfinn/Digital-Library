@@ -1389,3 +1389,231 @@ body {
   .explore-hero-cover { width: 130px; }
   .explore-hero-synopsis { -webkit-line-clamp: 4; }
 }
+
+/* ============================== Read status & lists ============================== */
+
+/* Read badge on a cover (Explore shelves, browse grid/list, list page) */
+.shelf-item, .browse-item { position: relative; }
+.read-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #004bec;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+/* ---------- Tray: status toggle + add-to-list ---------- */
+.tray-shelf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-top: 18px;
+}
+.tray-status {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.05);
+}
+.tray-status button {
+  padding: 7px 15px;
+  border: none;
+  border-radius: 9px;
+  background: none;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #6f6f6f;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.tray-status button.active { background: #fff; color: #1d1d1f; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12); }
+.tray-status button[data-read="true"].active { background: #004bec; color: #fff; }
+
+.tray-listwrap { position: relative; }
+.tray-listbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #e0e0e8;
+  border-radius: 29px;
+  background: #fff;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #2b2b2b;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.tray-listbtn:hover { background: #f6f6f9; }
+.tray-listbtn img { width: 15px; height: 15px; opacity: 0.55; }
+
+.tray-listmenu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 236px;
+  max-height: 264px;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.2);
+  padding: 6px;
+  z-index: 5;
+}
+.listmenu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  background: none;
+  border-radius: 9px;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 500;
+  font-size: 14px;
+  color: #2b2b2b;
+  cursor: pointer;
+  text-align: left;
+}
+.listmenu-item:hover { background: #f4f4f7; }
+.listmenu-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  border: 1.5px solid #ccced9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.listmenu-item.checked .listmenu-check { background: #004bec; border-color: #004bec; }
+.listmenu-item.checked .listmenu-check::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  margin-top: -2px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.listmenu-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listmenu-create {
+  display: flex;
+  gap: 6px;
+  padding: 8px 6px 4px;
+  margin-top: 4px;
+  border-top: 1px solid #f0f0f4;
+}
+.listmenu-create input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 13px;
+}
+.listmenu-create button {
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: #004bec;
+  color: #fff;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* ---------- Lists page ---------- */
+.lists-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.lists-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 26px;
+  color: #1d1d1f;
+}
+.lists-new-btn {
+  flex-shrink: 0;
+  height: 38px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 29px;
+  background: #004bec;
+  color: #fff;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.lists-new-btn:hover { background: #0038b8; }
+
+.list-creator { display: flex; gap: 8px; align-items: center; margin-bottom: 24px; }
+.list-creator input {
+  flex: 1;
+  max-width: 320px;
+  height: 38px;
+  padding: 0 14px;
+  border: 1.5px solid #ddd;
+  border-radius: 10px;
+  font-family: 'Figtree', sans-serif;
+  font-size: 14px;
+}
+
+.list-section { margin-bottom: 34px; animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
+.list-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.list-section-headleft { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.list-section-title {
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 18px;
+  color: #1d1d1f;
+}
+.list-section-count {
+  font-family: 'Figtree', sans-serif;
+  font-size: 13px;
+  color: #b1b1b1;
+}
+.list-del-btn {
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 13px;
+  color: #9a9aa2;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+.list-del-btn:hover, .list-del-btn.confirming { color: #c62828; }
+.list-empty-hint {
+  font-family: 'Figtree', sans-serif;
+  font-size: 14px;
+  color: #b1b1b1;
+  padding: 6px 0;
+}

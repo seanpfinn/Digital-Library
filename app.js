@@ -199,8 +199,11 @@ const bookAuthorEl = document.getElementById('bookAuthor');
 const COVER_VERSION = '2';
 
 function coverSrc(book) {
-  // Captured/uploaded covers are data URLs — leave those alone.
-  return book.cover.startsWith('data:') ? book.cover : `${book.cover}?v=${COVER_VERSION}`;
+  const cover = book.cover || '';
+  // Data URLs (captured photos) and remote URLs are used as-is; only the
+  // bundled covers/ files get the cache-busting version query.
+  if (!cover || cover.startsWith('data:') || /^https?:/.test(cover)) return cover;
+  return `${cover}?v=${COVER_VERSION}`;
 }
 
 /* How many slots the shelf renders. Always a whole number of copies of the
@@ -1803,7 +1806,13 @@ function renderOtherMatches() {
 }
 
 matchAddBtn.addEventListener('click', () => {
-  if (currentMatch) addBookToLibrary(currentMatch);
+  if (!currentMatch) return;
+  // currentMatch stores its art as coverUrl; addBookToLibrary wants `cover`.
+  addBookToLibrary({
+    title: currentMatch.title,
+    author: currentMatch.author,
+    cover: currentMatch.coverUrl || currentMatch.thumbUrl,
+  });
 });
 
 matchRejectBtn.addEventListener('click', () => {
