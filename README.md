@@ -42,6 +42,12 @@ Then open <http://localhost:8734>.
     a single tasteful **error state** with a retry and a manual-entry option.
 - **Remove a book** — open its tray and use *Remove from library* (tap twice to
   confirm). Removing a built-in book is remembered across reloads.
+- **Read / Unread** — each book's tray has an Unread/Read toggle. Read books show
+  a blue check badge on their cover in the grid, Explore, and List views.
+- **Lists** — from a book's tray, *Add to list* toggles it into any list or
+  creates a new one. The **List** tab shows every list with its books; create
+  and delete lists there too. Read state and list membership persist in
+  `localStorage` and are cleaned up when a book is removed.
   - If no camera is available, an image-upload fallback appears (it also tries
     to read a barcode from the uploaded photo).
 - Added books persist in `localStorage`.

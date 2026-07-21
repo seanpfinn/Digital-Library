@@ -925,14 +925,249 @@ function bookById(id) {
   return books.find((b) => b.id === id);
 }
 
-/* ---------- Explore ---------- */
+/* ---------- Explore (Open Library discovery) ---------- */
 
-const EXPLORE_SHELVES = [
-  { title: 'Building Products', ids: ['inspired', 'hooked', 'cold-start-problem', 'build'] },
-  { title: 'Focus & Habits', ids: ['atomic-habits', 'indistractable', 'designing-your-life'] },
-  { title: 'Design & Creativity', ids: ['creative-act', 'user-friendly'] },
+const EXPLORE_THEMES = [
+  {
+    title: 'Product & Startups',
+    seeds: ['The Lean Startup', 'Zero to One Peter Thiel', 'The Hard Thing About Hard Things',
+      'Shape Up Basecamp', 'Escaping the Build Trap'],
+  },
+  {
+    title: 'Focus & Deep Work',
+    seeds: ['Deep Work Cal Newport', 'The Power of Habit', 'Make Time Jake Knapp',
+      'Digital Minimalism', 'Four Thousand Weeks Oliver Burkeman'],
+  },
+  {
+    title: 'Design & Creativity',
+    seeds: ['The Design of Everyday Things', 'Steal Like an Artist', 'Show Your Work Austin Kleon',
+      'Thinking with Type', 'Creative Selection Ken Kocienda'],
+  },
 ];
-const FEATURED_ORDER = ['inspired', 'atomic-habits', 'creative-act', 'build', 'hooked'];
+
+const olCover = (id, size) => `https://covers.openlibrary.org/b/id/${id}-${size}.jpg`;
+
+function normalizeOlWork(w) {
+  const id = w.cover_i || w.cover_id;
+  return {
+    key: w.key,
+    title: w.title,
+    author: (w.author_name && w.author_name[0]) || (w.authors && w.authors[0] && w.authors[0].name) || '',
+    coverUrl: olCover(id, 'M'),
+    coverLarge: olCover(id, 'L'),
+  };
+}
+
+async function olTrending(period = 'weekly', limit = 16) {
+  const res = await fetch(`https://openlibrary.org/trending/${period}.json?limit=${limit}`);
+  if (!res.ok) throw new Error('trending failed');
+  const data = await res.json();
+  return (data.works || []).filter((w) => w.cover_i).map(normalizeOlWork);
+}
+
+async function olSearchOne(query) {
+  try {
+    const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(query)}` +
+      '&fields=title,author_name,cover_i,key&limit=3';
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const doc = (data.docs || []).find((d) => d.cover_i);
+    return doc ? normalizeOlWork(doc) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function olDescription(workKey) {
+  try {
+    const res = await fetch(`https://openlibrary.org${workKey}.json`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    const d = data.description;
+    const text = typeof d === 'string' ? d : d && d.value ? d.value : '';
+    // Strip Open Library's trailing source links.
+    return text.split(/\r?\n----|\(\[source\]/)[0].trim();
+  } catch {
+    return '';
+  }
+}
+
+/* A book counts as "in your library" if its work key or title already matches. */
+function ownedBookFor(doc) {
+  const t = doc.title.toLowerCase();
+  return books.find((b) => b.olKey === doc.key || b.title.toLowerCase() === t);
+}
+
+let exploreData = null;   // cached discovery results
+let exploreToken = 0;     // guards against a stale async render
+
+async function loadExploreData() {
+  const trending = await olTrending('weekly', 16);
+  const heroDesc = trending[0] ? await olDescription(trending[0].key) : '';
+  const shelves = await Promise.all(
+    EXPLORE_THEMES.map(async (theme) => ({
+      title: theme.title,
+      items: (await Promise.all(theme.seeds.map(olSearchOne))).filter(Boolean),
+    }))
+  );
+  return { trending, heroDesc, shelves: shelves.filter((s) => s.items.length) };
+}
+
+async function addFromExplore(doc, btn) {
+  const existing = ownedBookFor(doc);
+  if (existing) { markCardOwned(btn); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Adding…';
+  const book = {
+    id: `ol:${doc.key}`,
+    title: doc.title,
+    author: doc.author,
+    cover: doc.coverLarge,
+    custom: true,
+    source: 'openlibrary',
+    olKey: doc.key,
+  };
+  book.synopsis = await olDescription(doc.key);
+  books.push(book);
+  saveCustomBooks();
+  buildCoverflow();
+  updateEmptyState();
+  markCardOwned(btn);
+}
+
+function markCardOwned(btn) {
+  btn.disabled = true;
+  btn.classList.add('owned');
+  btn.textContent = '✓ In library';
+}
+
+function exploreCard(doc) {
+  const owned = ownedBookFor(doc);
+  const item = elem('div', 'shelf-item explore-card');
+
+  const img = elem('img');
+  img.src = doc.coverUrl;
+  img.alt = doc.title;
+  img.loading = 'lazy';
+  const t = elem('h4');
+  t.textContent = doc.title;
+  const s = elem('span');
+  s.textContent = doc.author;
+
+  const btn = elem('button', `explore-add${owned ? ' owned' : ''}`);
+  btn.type = 'button';
+  btn.textContent = owned ? '✓ In library' : '+ Add';
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const b = ownedBookFor(doc);
+    if (b) openTray(b);
+    else addFromExplore(doc, btn);
+  });
+
+  // Tapping the cover opens it if owned, otherwise adds it.
+  img.addEventListener('click', () => {
+    const b = ownedBookFor(doc);
+    if (b) openTray(b);
+    else addFromExplore(doc, btn);
+  });
+
+  item.append(img, t, s, btn);
+  return item;
+}
+
+function exploreShelf(title, docs) {
+  const row = elem('div', 'shelf-row');
+  const head = elem('div', 'shelf-head');
+  const h = elem('h3', 'shelf-title');
+  h.textContent = title;
+  head.appendChild(h);
+  const scroll = elem('div', 'shelf-scroll');
+  docs.forEach((d) => scroll.appendChild(exploreCard(d)));
+  row.append(head, scroll);
+  return row;
+}
+
+function renderExploreContent(data) {
+  const inner = document.getElementById('exploreInner');
+  inner.innerHTML = '';
+
+  const hero = data.trending[0];
+  if (hero) {
+    const owned = ownedBookFor(hero);
+    const heroEl = elem('div', 'explore-hero');
+    const cover = elem('img', 'explore-hero-cover');
+    cover.src = hero.coverLarge;
+    cover.alt = hero.title;
+
+    const body = elem('div', 'explore-hero-body');
+    const eyebrow = elem('p', 'explore-eyebrow');
+    eyebrow.textContent = 'Trending now';
+    const ht = elem('h3', 'explore-hero-title');
+    ht.textContent = hero.title;
+    const ha = elem('p', 'explore-hero-author');
+    ha.textContent = hero.author;
+    const hs = elem('p', 'explore-hero-synopsis');
+    hs.textContent = data.heroDesc || 'A book readers are picking up this week.';
+    const hb = elem('button', `explore-hero-btn${owned ? ' owned' : ''}`);
+    hb.textContent = owned ? '✓ In library' : '+ Add to collection';
+    const heroAction = () => {
+      const b = ownedBookFor(hero);
+      if (b) openTray(b);
+      else addFromExplore(hero, hb);
+    };
+    hb.addEventListener('click', heroAction);
+    cover.addEventListener('click', heroAction);
+    body.append(eyebrow, ht, ha, hs, hb);
+    heroEl.append(cover, body);
+    inner.appendChild(heroEl);
+  }
+
+  const trendingRest = data.trending.slice(1);
+  if (trendingRest.length) inner.appendChild(exploreShelf('Trending this week', trendingRest));
+  data.shelves.forEach((s) => inner.appendChild(exploreShelf(s.title, s.items)));
+}
+
+function exploreMessage(html) {
+  const inner = document.getElementById('exploreInner');
+  inner.innerHTML = '';
+  const box = elem('div', 'empty-state');
+  box.style.marginTop = '6vh';
+  box.innerHTML = html;
+  inner.appendChild(box);
+  return box;
+}
+
+async function renderExplore() {
+  // Re-render from cache instantly (owned state is recomputed each time).
+  if (exploreData) { renderExploreContent(exploreData); return; }
+
+  const token = ++exploreToken;
+  const inner = document.getElementById('exploreInner');
+  inner.innerHTML = '<div class="explore-loading"><span class="spinner"></span><p>Finding books to explore…</p></div>';
+
+  try {
+    const data = await loadExploreData();
+    if (token !== exploreToken || currentTab !== 'explore') return;
+    if (!data.trending.length && !data.shelves.length) {
+      exploreMessage("<h2>Nothing to show right now</h2><p>Open Library didn't return any books. Try again in a moment.</p>");
+      return;
+    }
+    exploreData = data;
+    renderExploreContent(data);
+  } catch (err) {
+    console.warn('Explore load failed:', err);
+    if (token !== exploreToken || currentTab !== 'explore') return;
+    const box = exploreMessage(
+      "<h2>Couldn't reach Open Library</h2><p>Check your connection and try again.</p>"
+    );
+    const retry = elem('button', 'explore-hero-btn');
+    retry.textContent = 'Try again';
+    retry.addEventListener('click', renderExplore);
+    box.appendChild(retry);
+  }
+}
 
 function readBadge() {
   const b = elem('span', 'read-badge');
