@@ -79,6 +79,8 @@ const DEFAULT_BOOKS = [
 
 const STORAGE_KEY = 'digital-library-custom-books';
 const REMOVED_KEY = 'digital-library-removed';
+const READ_KEY = 'digital-library-read';
+const LISTS_KEY = 'digital-library-lists';
 
 function loadJSON(key, fallback) {
   try {
@@ -86,6 +88,50 @@ function loadJSON(key, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function saveJSON(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Could not persist ${key}`, e);
+  }
+}
+
+/* Read state (id -> true) and reading lists ([{id, name, bookIds}]). */
+let readStatus = loadJSON(READ_KEY, {});
+let lists = loadJSON(LISTS_KEY, []);
+
+function isRead(book) {
+  return !!readStatus[book.id];
+}
+function setRead(book, read) {
+  if (read) readStatus[book.id] = true;
+  else delete readStatus[book.id];
+  saveJSON(READ_KEY, readStatus);
+}
+
+function saveLists() {
+  saveJSON(LISTS_KEY, lists);
+}
+function createList(name) {
+  const list = { id: `list-${Date.now()}`, name: name.trim() || 'Untitled list', bookIds: [] };
+  lists.push(list);
+  saveLists();
+  return list;
+}
+function deleteList(id) {
+  lists = lists.filter((l) => l.id !== id);
+  saveLists();
+}
+function toggleBookInList(list, book) {
+  const i = list.bookIds.indexOf(book.id);
+  if (i >= 0) list.bookIds.splice(i, 1);
+  else list.bookIds.push(book.id);
+  saveLists();
+}
+function listsContaining(book) {
+  return lists.filter((l) => l.bookIds.includes(book.id)).length;
 }
 
 function loadCustomBooks() {
@@ -114,6 +160,16 @@ function removeBook(id) {
   books.splice(i, 1);
   if (wasDefault && !removedIds.includes(id)) removedIds.push(id);
   saveCustomBooks();
+
+  // Forget its read state and drop it from any lists.
+  delete readStatus[id];
+  saveJSON(READ_KEY, readStatus);
+  let listsChanged = false;
+  lists.forEach((l) => {
+    const j = l.bookIds.indexOf(id);
+    if (j >= 0) { l.bookIds.splice(j, 1); listsChanged = true; }
+  });
+  if (listsChanged) saveLists();
 
   // Keep the shelf pointing at roughly where the reader was looking.
   if (books.length) slotCursor = Math.max(0, Math.min(slotCursor, books.length - 1));
@@ -471,9 +527,105 @@ trayRemove.addEventListener('click', () => {
   closeTray();
 });
 
+/* ----- Read status & lists, in the tray ----- */
+const trayStatusEl = document.getElementById('trayStatus');
+const trayListBtn = document.getElementById('trayListBtn');
+const trayListLabel = document.getElementById('trayListLabel');
+const trayListMenu = document.getElementById('trayListMenu');
+
+function renderTrayStatus(book) {
+  const read = isRead(book);
+  trayStatusEl.querySelectorAll('button').forEach((b) => {
+    b.classList.toggle('active', (b.dataset.read === 'true') === read);
+  });
+}
+
+trayStatusEl.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !trayBook) return;
+  setRead(trayBook, btn.dataset.read === 'true');
+  renderTrayStatus(trayBook);
+  // Reflect the change wherever the book is shown.
+  if (currentTab === 'collection' && currentView !== 'cover') renderBrowse();
+  if (currentTab === 'list') renderLists();
+});
+
+function updateTrayListLabel(book) {
+  const n = listsContaining(book);
+  trayListLabel.textContent = n ? `In ${n} list${n === 1 ? '' : 's'}` : 'Add to list';
+}
+
+function renderTrayListMenu(book) {
+  trayListMenu.innerHTML = '';
+
+  lists.forEach((list) => {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = 'listmenu-item';
+    const inList = list.bookIds.includes(book.id);
+    row.classList.toggle('checked', inList);
+    row.innerHTML = `<span class="listmenu-check" aria-hidden="true"></span><span class="listmenu-name"></span>`;
+    row.querySelector('.listmenu-name').textContent = list.name;
+    row.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleBookInList(list, book);
+      row.classList.toggle('checked', list.bookIds.includes(book.id));
+      updateTrayListLabel(book);
+      if (currentTab === 'list') renderLists();
+    });
+    trayListMenu.appendChild(row);
+  });
+
+  // New-list creator
+  const create = document.createElement('div');
+  create.className = 'listmenu-create';
+  create.innerHTML =
+    '<input type="text" placeholder="New list name" maxlength="60" />' +
+    '<button type="button">Create</button>';
+  const input = create.querySelector('input');
+  const addBtn = create.querySelector('button');
+  const submit = () => {
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    const list = createList(name);
+    toggleBookInList(list, book);
+    renderTrayListMenu(book);
+    updateTrayListLabel(book);
+    if (currentTab === 'list') renderLists();
+  };
+  addBtn.addEventListener('click', (e) => { e.stopPropagation(); submit(); });
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.stopPropagation(); submit(); } });
+  input.addEventListener('click', (e) => e.stopPropagation());
+  trayListMenu.appendChild(create);
+}
+
+function openTrayListMenu() {
+  if (!trayBook) return;
+  renderTrayListMenu(trayBook);
+  trayListMenu.hidden = false;
+  trayListBtn.setAttribute('aria-expanded', 'true');
+}
+function closeTrayListMenu() {
+  trayListMenu.hidden = true;
+  trayListBtn.setAttribute('aria-expanded', 'false');
+}
+trayListBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (trayListMenu.hidden) openTrayListMenu();
+  else closeTrayListMenu();
+});
+document.addEventListener('click', (e) => {
+  if (!trayListMenu.hidden && !trayListMenu.contains(e.target) && e.target !== trayListBtn) {
+    closeTrayListMenu();
+  }
+});
+
 function openTray(book) {
   trayBook = book;
   resetRemoveButton();
+  closeTrayListMenu();
+  renderTrayStatus(book);
+  updateTrayListLabel(book);
   trayCover.src = coverSrc(book);
   trayCover.alt = `${book.title} cover`;
   trayTitle.textContent = book.title;
@@ -576,6 +728,7 @@ function renderBrowse() {
     text.append(title, author);
 
     item.append(img, text);
+    if (isRead(book)) item.appendChild(readBadge());
     // Centre it on the shelf behind us, and show its details
     item.addEventListener('click', () => {
       selectBook(books.indexOf(book));
@@ -673,6 +826,7 @@ function applyTab() {
     browseEl.hidden = true;
     emptyShelf.hidden = true;
     if (currentTab === 'explore') renderExplore();
+    if (currentTab === 'list') renderLists();
     if (currentTab === 'settings') renderSettings();
   }
 }
@@ -777,6 +931,30 @@ const EXPLORE_SHELVES = [
 ];
 const FEATURED_ORDER = ['inspired', 'atomic-habits', 'creative-act', 'build', 'hooked'];
 
+function readBadge() {
+  const b = elem('span', 'read-badge');
+  b.title = 'Read';
+  b.innerHTML =
+    '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2.5 6.2 5 8.5 9.5 3.5" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  return b;
+}
+
+function shelfItem(book) {
+  const item = elem('div', 'shelf-item');
+  const img = elem('img');
+  img.src = coverSrc(book);
+  img.alt = book.title;
+  img.loading = 'lazy';
+  const t = elem('h4');
+  t.textContent = book.title;
+  const s = elem('span');
+  s.textContent = book.author;
+  item.append(img, t, s);
+  if (isRead(book)) item.appendChild(readBadge());
+  item.addEventListener('click', () => openTray(book));
+  return item;
+}
+
 function shelfRow(title, items) {
   const row = elem('div', 'shelf-row');
   const head = elem('div', 'shelf-head');
@@ -787,20 +965,7 @@ function shelfRow(title, items) {
   head.append(h, count);
 
   const scroll = elem('div', 'shelf-scroll');
-  items.forEach((b) => {
-    const item = elem('div', 'shelf-item');
-    const img = elem('img');
-    img.src = coverSrc(b);
-    img.alt = b.title;
-    img.loading = 'lazy';
-    const t = elem('h4');
-    t.textContent = b.title;
-    const s = elem('span');
-    s.textContent = b.author;
-    item.append(img, t, s);
-    item.addEventListener('click', () => openTray(b));
-    scroll.appendChild(item);
-  });
+  items.forEach((b) => scroll.appendChild(shelfItem(b)));
   row.append(head, scroll);
   return row;
 }
@@ -853,6 +1018,123 @@ function renderExplore() {
   if (leftover.length) shelves.push({ title: 'More in your library', items: leftover });
 
   shelves.forEach((s) => inner.appendChild(shelfRow(s.title, s.items)));
+}
+
+/* ---------- Lists ---------- */
+
+function listSection(list) {
+  const section = elem('div', 'list-section');
+
+  const head = elem('div', 'list-section-head');
+  const left = elem('div', 'list-section-headleft');
+  const title = elem('h2', 'list-section-title');
+  title.textContent = list.name;
+  const count = elem('span', 'list-section-count');
+  count.textContent = `${list.bookIds.length} book${list.bookIds.length === 1 ? '' : 's'}`;
+  left.append(title, count);
+
+  const del = elem('button', 'list-del-btn');
+  del.type = 'button';
+  del.textContent = 'Delete';
+  del.addEventListener('click', () => {
+    if (!del.classList.contains('confirming')) {
+      del.classList.add('confirming');
+      del.textContent = 'Confirm delete';
+      setTimeout(() => { del.classList.remove('confirming'); del.textContent = 'Delete'; }, 4000);
+      return;
+    }
+    deleteList(list.id);
+    renderLists();
+  });
+  head.append(left, del);
+  section.appendChild(head);
+
+  const items = list.bookIds.map(bookById).filter(Boolean);
+  if (!items.length) {
+    const hint = elem('p', 'list-empty-hint');
+    hint.textContent = 'No books yet — open any book and choose “Add to list”.';
+    section.appendChild(hint);
+  } else {
+    const scroll = elem('div', 'shelf-scroll');
+    items.forEach((b) => scroll.appendChild(shelfItem(b)));
+    section.appendChild(scroll);
+  }
+  return section;
+}
+
+function startNewList() {
+  const inner = document.getElementById('listInner');
+  if (inner.querySelector('.list-creator')) {
+    inner.querySelector('.list-creator input').focus();
+    return;
+  }
+  const creator = elem('div', 'list-creator');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'List name';
+  input.maxLength = 60;
+  const create = elem('button', 'lists-new-btn');
+  create.type = 'button';
+  create.textContent = 'Create';
+  const cancel = elem('button', 'list-del-btn');
+  cancel.type = 'button';
+  cancel.textContent = 'Cancel';
+
+  const submit = () => {
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    createList(name);
+    renderLists();
+  };
+  create.addEventListener('click', submit);
+  cancel.addEventListener('click', () => renderLists());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+    if (e.key === 'Escape') renderLists();
+  });
+
+  creator.append(input, create, cancel);
+  // Just below the header row
+  inner.insertBefore(creator, inner.children[1] || null);
+  input.focus();
+}
+
+function renderLists() {
+  const inner = document.getElementById('listInner');
+  inner.innerHTML = '';
+
+  const head = elem('div', 'lists-head');
+  const h = elem('h1', 'lists-title');
+  h.textContent = 'Lists';
+  const newBtn = elem('button', 'lists-new-btn');
+  newBtn.type = 'button';
+  newBtn.textContent = '+ New list';
+  newBtn.addEventListener('click', startNewList);
+  head.append(h, newBtn);
+  inner.appendChild(head);
+
+  if (!lists.length) {
+    const empty = elem('div', 'empty-state');
+    const art = elem('div', 'empty-art');
+    art.innerHTML =
+      '<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="40" cy="40" r="40" fill="#EAF0FF"/>' +
+      '<path d="M30 25h20a3 3 0 0 1 3 3v27l-13-8-13 8V28a3 3 0 0 1 3-3z" fill="#fff" stroke="#004BEC" stroke-width="2.6" stroke-linejoin="round"/>' +
+      '</svg>';
+    const h2 = document.createElement('h2');
+    h2.textContent = 'No lists yet';
+    const p = document.createElement('p');
+    p.textContent = 'Group books into lists — “To read”, “Favourites”, anything. Create one, then add books from their details.';
+    const cta = elem('button', 'explore-hero-btn');
+    cta.type = 'button';
+    cta.textContent = 'Create a list';
+    cta.addEventListener('click', startNewList);
+    empty.append(art, h2, p, cta);
+    inner.appendChild(empty);
+    return;
+  }
+
+  lists.forEach((list) => inner.appendChild(listSection(list)));
 }
 
 /* ---------- Settings ---------- */
