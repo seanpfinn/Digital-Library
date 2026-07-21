@@ -106,6 +106,30 @@
     <p class="browse-empty" id="browseEmpty" hidden>No books match that search.</p>
   </section>
 
+  <!-- Explore tab -->
+  <section class="tab-page" id="explorePage" hidden>
+    <div class="page-inner" id="exploreInner"></div>
+  </section>
+
+  <!-- List tab (empty state for now) -->
+  <section class="tab-page" id="listPage" hidden>
+    <div class="empty-state">
+      <div class="empty-art" aria-hidden="true">
+        <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="40" cy="40" r="40" fill="#EAF0FF"/>
+          <path d="M30 25h20a3 3 0 0 1 3 3v27l-13-8-13 8V28a3 3 0 0 1 3-3z" fill="#fff" stroke="#004BEC" stroke-width="2.6" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <h2>Your reading list is empty</h2>
+      <p>Books you set aside to read will collect here. We're building this next.</p>
+    </div>
+  </section>
+
+  <!-- Settings tab -->
+  <section class="tab-page" id="settingsPage" hidden>
+    <div class="page-inner" id="settingsInner"></div>
+  </section>
+
   <!-- Add-book modal -->
   <div class="modal-backdrop" id="modalBackdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
