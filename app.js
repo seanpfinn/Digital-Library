@@ -1208,56 +1208,6 @@ function shelfRow(title, items) {
   return row;
 }
 
-function renderExplore() {
-  const inner = document.getElementById('exploreInner');
-  inner.innerHTML = '';
-
-  if (!books.length) {
-    const empty = elem('div', 'empty-state');
-    empty.style.marginTop = '6vh';
-    empty.innerHTML = "<h2>Nothing to explore yet</h2><p>Add a few books and we'll surface them here.</p>";
-    inner.appendChild(empty);
-    return;
-  }
-
-  // Featured pick
-  const featured = FEATURED_ORDER.map(bookById).find(Boolean) || books[0];
-  const hero = elem('div', 'explore-hero');
-  const heroCover = elem('img', 'explore-hero-cover');
-  heroCover.src = coverSrc(featured);
-  heroCover.alt = featured.title;
-  heroCover.addEventListener('click', () => openTray(featured));
-
-  const body = elem('div', 'explore-hero-body');
-  const eyebrow = elem('p', 'explore-eyebrow');
-  eyebrow.textContent = "Editor's Pick";
-  const ht = elem('h3', 'explore-hero-title');
-  ht.textContent = featured.title;
-  const ha = elem('p', 'explore-hero-author');
-  ha.textContent = featured.author;
-  const hs = elem('p', 'explore-hero-synopsis');
-  hs.textContent = featured.synopsis || '';
-  const hb = elem('button', 'explore-hero-btn');
-  hb.textContent = 'View details';
-  hb.addEventListener('click', () => openTray(featured));
-  body.append(eyebrow, ht, ha, hs, hb);
-  hero.append(heroCover, body);
-  inner.appendChild(hero);
-
-  // Curated shelves, filtered to what's actually on the shelf
-  const shown = new Set();
-  const shelves = EXPLORE_SHELVES
-    .map((s) => ({ title: s.title, items: s.ids.map(bookById).filter(Boolean) }))
-    .filter((s) => s.items.length);
-  shelves.forEach((s) => s.items.forEach((b) => shown.add(b.id)));
-
-  // Anything not in a curated group (e.g. books you added yourself)
-  const leftover = books.filter((b) => !shown.has(b.id));
-  if (leftover.length) shelves.push({ title: 'More in your library', items: leftover });
-
-  shelves.forEach((s) => inner.appendChild(shelfRow(s.title, s.items)));
-}
-
 /* ---------- Lists ---------- */
 
 function listSection(list) {
