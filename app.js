@@ -440,11 +440,17 @@ let trayBook = null;
 
 /* Hide the shelf and prompt when there is nothing left to show. */
 function updateEmptyState() {
+  // The Collection views only exist on the Collection tab.
+  if (typeof currentTab !== 'undefined' && currentTab !== 'collection') {
+    emptyShelf.hidden = true;
+    stageEl.hidden = true;
+    browseEl.hidden = true;
+    return;
+  }
   const empty = books.length === 0;
   emptyShelf.hidden = !empty;
   stageEl.hidden = empty || currentView !== 'cover';
-  if (empty) browseEl.hidden = true;
-  else if (currentView !== 'cover') browseEl.hidden = false;
+  browseEl.hidden = empty || currentView === 'cover';
 }
 
 function resetRemoveButton() {
@@ -629,7 +635,14 @@ function moveTabIndicator({ animate = true } = {}) {
   }
 }
 
+const viewCtasEl = document.getElementById('viewCtas');
+const explorePage = document.getElementById('explorePage');
+const listPage = document.getElementById('listPage');
+const settingsPage = document.getElementById('settingsPage');
+let currentTab = 'collection';
+
 function setActiveTab(tab) {
+  currentTab = tab;
   tabLinks.forEach((t) => {
     const on = t.dataset.tab === tab;
     t.classList.toggle('active', on);
@@ -637,6 +650,31 @@ function setActiveTab(tab) {
     else t.removeAttribute('aria-haspopup');
   });
   moveTabIndicator();
+  applyTab();
+}
+
+/* Show the content that belongs to the active tab, hide the rest. */
+function applyTab() {
+  const isCollection = currentTab === 'collection';
+  viewCtasEl.hidden = !isCollection;
+  explorePage.hidden = currentTab !== 'explore';
+  listPage.hidden = currentTab !== 'list';
+  settingsPage.hidden = currentTab !== 'settings';
+  closeTray();
+
+  if (isCollection) {
+    updateEmptyState();
+    if (books.length) {
+      if (currentView === 'cover') replayShelf();
+      else renderBrowse();
+    }
+  } else {
+    stageEl.hidden = true;
+    browseEl.hidden = true;
+    emptyShelf.hidden = true;
+    if (currentTab === 'explore') renderExplore();
+    if (currentTab === 'settings') renderSettings();
+  }
 }
 
 /* Fonts land after first paint and change tab widths, so measure again. */
@@ -704,8 +742,12 @@ window.addEventListener('resize', () => {
   if (!tabsCollapsed()) closeTabMenu();
 });
 
-/* In cover view, searching jumps to the first match; elsewhere it filters. */
+/* Searching from another tab drops you back into the Collection to see results. */
 searchInput.addEventListener('input', () => {
+  if (currentTab !== 'collection') {
+    if (!searchInput.value.trim()) return;
+    setActiveTab('collection');
+  }
   if (currentView === 'cover') {
     const match = visibleBooks()[0];
     if (match && searchInput.value.trim()) selectBook(books.indexOf(match));
@@ -713,6 +755,302 @@ searchInput.addEventListener('input', () => {
     renderBrowse();
   }
 });
+
+/* ============================== Explore & Settings pages ============================== */
+
+function elem(tag, cls) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  return e;
+}
+
+function bookById(id) {
+  return books.find((b) => b.id === id);
+}
+
+/* ---------- Explore ---------- */
+
+const EXPLORE_SHELVES = [
+  { title: 'Building Products', ids: ['inspired', 'hooked', 'cold-start-problem', 'build'] },
+  { title: 'Focus & Habits', ids: ['atomic-habits', 'indistractable', 'designing-your-life'] },
+  { title: 'Design & Creativity', ids: ['creative-act', 'user-friendly'] },
+];
+const FEATURED_ORDER = ['inspired', 'atomic-habits', 'creative-act', 'build', 'hooked'];
+
+function shelfRow(title, items) {
+  const row = elem('div', 'shelf-row');
+  const head = elem('div', 'shelf-head');
+  const h = elem('h3', 'shelf-title');
+  h.textContent = title;
+  const count = elem('span', 'shelf-count');
+  count.textContent = `${items.length} book${items.length === 1 ? '' : 's'}`;
+  head.append(h, count);
+
+  const scroll = elem('div', 'shelf-scroll');
+  items.forEach((b) => {
+    const item = elem('div', 'shelf-item');
+    const img = elem('img');
+    img.src = coverSrc(b);
+    img.alt = b.title;
+    img.loading = 'lazy';
+    const t = elem('h4');
+    t.textContent = b.title;
+    const s = elem('span');
+    s.textContent = b.author;
+    item.append(img, t, s);
+    item.addEventListener('click', () => openTray(b));
+    scroll.appendChild(item);
+  });
+  row.append(head, scroll);
+  return row;
+}
+
+function renderExplore() {
+  const inner = document.getElementById('exploreInner');
+  inner.innerHTML = '';
+
+  if (!books.length) {
+    const empty = elem('div', 'empty-state');
+    empty.style.marginTop = '6vh';
+    empty.innerHTML = "<h2>Nothing to explore yet</h2><p>Add a few books and we'll surface them here.</p>";
+    inner.appendChild(empty);
+    return;
+  }
+
+  // Featured pick
+  const featured = FEATURED_ORDER.map(bookById).find(Boolean) || books[0];
+  const hero = elem('div', 'explore-hero');
+  const heroCover = elem('img', 'explore-hero-cover');
+  heroCover.src = coverSrc(featured);
+  heroCover.alt = featured.title;
+  heroCover.addEventListener('click', () => openTray(featured));
+
+  const body = elem('div', 'explore-hero-body');
+  const eyebrow = elem('p', 'explore-eyebrow');
+  eyebrow.textContent = "Editor's Pick";
+  const ht = elem('h3', 'explore-hero-title');
+  ht.textContent = featured.title;
+  const ha = elem('p', 'explore-hero-author');
+  ha.textContent = featured.author;
+  const hs = elem('p', 'explore-hero-synopsis');
+  hs.textContent = featured.synopsis || '';
+  const hb = elem('button', 'explore-hero-btn');
+  hb.textContent = 'View details';
+  hb.addEventListener('click', () => openTray(featured));
+  body.append(eyebrow, ht, ha, hs, hb);
+  hero.append(heroCover, body);
+  inner.appendChild(hero);
+
+  // Curated shelves, filtered to what's actually on the shelf
+  const shown = new Set();
+  const shelves = EXPLORE_SHELVES
+    .map((s) => ({ title: s.title, items: s.ids.map(bookById).filter(Boolean) }))
+    .filter((s) => s.items.length);
+  shelves.forEach((s) => s.items.forEach((b) => shown.add(b.id)));
+
+  // Anything not in a curated group (e.g. books you added yourself)
+  const leftover = books.filter((b) => !shown.has(b.id));
+  if (leftover.length) shelves.push({ title: 'More in your library', items: leftover });
+
+  shelves.forEach((s) => inner.appendChild(shelfRow(s.title, s.items)));
+}
+
+/* ---------- Settings ---------- */
+
+const SETTINGS_KEY = 'digital-library-settings';
+let settings = { defaultView: 'cover', reflections: true, reduceMotion: false, ...loadJSON(SETTINGS_KEY, {}) };
+
+function saveSettings() {
+  try {
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('Could not persist settings', e);
+  }
+}
+
+function applySettings() {
+  document.documentElement.classList.toggle('no-reflections', !settings.reflections);
+  document.documentElement.classList.toggle('reduce-motion', !!settings.reduceMotion);
+}
+
+/* Rebuild the library array + UI after a library-level change. */
+function rebuildLibrary() {
+  const custom = books.filter((b) => b.custom);
+  books = [...DEFAULT_BOOKS.filter((b) => !removedIds.includes(b.id)), ...custom];
+  saveCustomBooks();
+  slotCursor = 0;
+  buildCoverflow();
+  updateEmptyState();
+  if (currentTab === 'settings') renderSettings();
+}
+
+function restoreRemoved() {
+  removedIds = [];
+  rebuildLibrary();
+}
+
+function resetLibrary() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(REMOVED_KEY);
+  } catch { /* ignore */ }
+  removedIds = [];
+  books = [...DEFAULT_BOOKS];
+  slotCursor = 0;
+  buildCoverflow();
+  updateEmptyState();
+  renderSettings();
+}
+
+/* Small builders for the settings rows */
+function settingsToggle(checked, onChange) {
+  const label = elem('label', 'switch');
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = !!checked;
+  const track = elem('span', 'track');
+  input.addEventListener('change', () => onChange(input.checked));
+  label.append(input, track);
+  return label;
+}
+
+function settingsSegmented(options, active, onChange) {
+  const wrap = elem('div', 'segmented');
+  options.forEach((opt) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = opt[0].toUpperCase() + opt.slice(1);
+    b.classList.toggle('active', opt === active);
+    b.addEventListener('click', () => {
+      [...wrap.children].forEach((c) => c.classList.remove('active'));
+      b.classList.add('active');
+      onChange(opt);
+    });
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+
+function settingsRow(strongText, spanText, control) {
+  const row = elem('div', 'settings-row');
+  const text = elem('div', 'settings-row-text');
+  const s = document.createElement('strong');
+  s.textContent = strongText;
+  const p = document.createElement('span');
+  p.textContent = spanText;
+  text.append(s, p);
+  row.appendChild(text);
+  if (control) {
+    const c = elem('div', 'settings-row-control');
+    c.appendChild(control);
+    row.appendChild(c);
+  }
+  return row;
+}
+
+function settingsGroup(title, rows) {
+  const g = elem('div', 'settings-group');
+  const h = document.createElement('h2');
+  h.textContent = title;
+  const card = elem('div', 'settings-card');
+  rows.forEach((r) => card.appendChild(r));
+  g.append(h, card);
+  return g;
+}
+
+function settingsActionBtn(label, onClick, danger = false) {
+  const b = elem('button', `settings-btn${danger ? ' danger' : ''}`);
+  b.textContent = label;
+  if (danger) {
+    // Destructive — tap twice to confirm.
+    b.addEventListener('click', () => {
+      if (!b.classList.contains('confirming')) {
+        b.classList.add('confirming');
+        b.textContent = 'Tap to confirm';
+        setTimeout(() => {
+          b.classList.remove('confirming');
+          b.textContent = label;
+        }, 4000);
+        return;
+      }
+      onClick();
+    });
+  } else {
+    b.addEventListener('click', onClick);
+  }
+  return b;
+}
+
+function renderSettings() {
+  const inner = document.getElementById('settingsInner');
+  inner.innerHTML = '';
+
+  // Reading experience
+  inner.appendChild(
+    settingsGroup('Reading experience', [
+      settingsRow(
+        'Default view',
+        'Which layout the Collection opens in.',
+        settingsSegmented(['cover', 'list', 'grid'], settings.defaultView, (v) => {
+          settings.defaultView = v;
+          saveSettings();
+        })
+      ),
+      settingsRow(
+        'Cover reflections',
+        'Show the mirrored shine beneath each cover.',
+        settingsToggle(settings.reflections, (on) => {
+          settings.reflections = on;
+          saveSettings();
+          applySettings();
+        })
+      ),
+      settingsRow(
+        'Reduce motion',
+        'Minimise animations and transitions.',
+        settingsToggle(settings.reduceMotion, (on) => {
+          settings.reduceMotion = on;
+          saveSettings();
+          applySettings();
+        })
+      ),
+    ])
+  );
+
+  // Library
+  const libRows = [
+    settingsRow('Books in your library', `${books.length} book${books.length === 1 ? '' : 's'} on your shelf.`),
+  ];
+  if (removedIds.length) {
+    libRows.push(
+      settingsRow(
+        'Hidden originals',
+        `${removedIds.length} built-in book${removedIds.length === 1 ? '' : 's'} removed.`,
+        settingsActionBtn('Restore', restoreRemoved)
+      )
+    );
+  }
+  libRows.push(
+    settingsRow(
+      'Reset library',
+      'Remove books you added and bring back the originals.',
+      settingsActionBtn('Reset', resetLibrary, true)
+    )
+  );
+  inner.appendChild(settingsGroup('Library', libRows));
+
+  // About
+  const about = elem('div', 'settings-group');
+  const ah = document.createElement('h2');
+  ah.textContent = 'About';
+  const ab = elem('div', 'settings-about');
+  ab.innerHTML =
+    'Digital Library — a Cover Flow shelf for the books worth keeping.<br>' +
+    'Cover art and metadata from <a href="https://openlibrary.org" target="_blank" rel="noopener">Open Library</a>.<br>' +
+    'Version 1.0';
+  about.append(ah, ab);
+  inner.appendChild(about);
+}
 
 /* ============================== Add-book modal ============================== */
 
@@ -1363,6 +1701,8 @@ document.addEventListener(
 
 /* ============================== Init ============================== */
 
+applySettings();
 buildCoverflow();
+if (settings.defaultView && settings.defaultView !== 'cover') setView(settings.defaultView);
 updateEmptyState();
 moveTabIndicator({ animate: false });
