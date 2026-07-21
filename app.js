@@ -985,9 +985,17 @@ async function olDescription(workKey) {
     if (!res.ok) return '';
     const data = await res.json();
     const d = data.description;
-    const text = typeof d === 'string' ? d : d && d.value ? d.value : '';
-    // Strip Open Library's trailing source links.
-    return text.split(/\r?\n----|\(\[source\]/)[0].trim();
+    let text = typeof d === 'string' ? d : d && d.value ? d.value : '';
+    // Open Library descriptions carry markdown and trailing source links.
+    text = text.split(/\r?\n----|\r?\n\r?\nSource:|\(\[source\]/)[0];
+    text = text
+      .replace(/<[^>]*>/g, '')                 // html tags
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1') // [label](url) -> label
+      .replace(/https?:\/\/\S+/g, '')          // stray URLs
+      .replace(/[*_`#>\\]+/g, '')              // markdown marks & stray backslashes
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text;
   } catch {
     return '';
   }

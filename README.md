@@ -58,10 +58,12 @@ Then open <http://localhost:8734>.
   replace a file in `covers/`, bump `COVER_VERSION` in [app.js](app.js) so
   browsers don't keep serving the cached copy.
 - The nav tabs now switch top-level content:
-  - **Explore** — an editorial view of your shelf: an "Editor's Pick" hero plus
-    themed, horizontally-scrolling rows (Building Products, Focus & Habits,
-    Design & Creativity, and a catch-all for books you added). Tap any cover for
-    its detail tray.
+  - **Explore** — live discovery from the **Open Library** API: a trending hero,
+    a "Trending this week" row, and curated themed rows (Product & Startups,
+    Focus & Deep Work, Design & Creativity) resolved from seed titles. Each card
+    has **+ Add** to pull the book — with its hi-res cover and a fetched
+    synopsis — into your collection; owned books show **✓ In library**. Results
+    are cached per session; failures show a retry. No API key needed.
   - **Collection** — the Cover Flow shelf and its list/grid views (unchanged).
   - **List** — a placeholder empty state for now; the reading-list UX is next.
   - **Settings** — real, persisted preferences: default Collection view,
