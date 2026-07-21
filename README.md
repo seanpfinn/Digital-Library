@@ -51,8 +51,16 @@ Then open <http://localhost:8734>.
 - Cover art in `covers/` is ~1200px artwork from the iTunes Search API. If you
   replace a file in `covers/`, bump `COVER_VERSION` in [app.js](app.js) so
   browsers don't keep serving the cached copy.
-- The nav tabs (Explore / Collection / List / Settings) are styled per the
-  design but only Collection has content behind it.
+- The nav tabs now switch top-level content:
+  - **Explore** — an editorial view of your shelf: an "Editor's Pick" hero plus
+    themed, horizontally-scrolling rows (Building Products, Focus & Habits,
+    Design & Creativity, and a catch-all for books you added). Tap any cover for
+    its detail tray.
+  - **Collection** — the Cover Flow shelf and its list/grid views (unchanged).
+  - **List** — a placeholder empty state for now; the reading-list UX is next.
+  - **Settings** — real, persisted preferences: default Collection view,
+    cover-reflection toggle, reduce-motion toggle, a library count, restore
+    removed originals, and a reset. Stored in `localStorage`.
 - `assets/vendor/` holds Tesseract's wasm core and English data (~6.5MB). It is
   fetched only the first time a cover needs reading, never on page load.
 - The OpenGraph tags use **relative** image paths. Most scrapers require an
