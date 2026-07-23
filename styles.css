@@ -107,6 +107,9 @@ body {
   width: 100%;
   max-width: 1120px;
   margin: var(--shelf-gap) auto 0;
+  /* Match the view-toggle height so the tabs sit in the same place on every
+     page, whether or not the toggles (Collection only) are shown. */
+  min-height: 36px;
 }
 
 .tabs { display: flex; align-items: center; gap: 36px; }
@@ -266,7 +269,8 @@ body {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-  padding: calc(var(--nav-bottom) + 28px) 20px 60px;
+  /* Same content start as the Explore/List/Settings pages. */
+  padding: calc(var(--nav-bottom) + 24px) 20px 60px;
 }
 .browse-inner {
   width: 100%;
@@ -623,8 +627,12 @@ body {
     padding: 14px 20px;
   }
 
-  /* Tabs collapse to the current one with a caret */
+  /* Tabs collapse to the current one with a caret. No entrance animation here:
+     switching tabs re-shows a hidden link, which would otherwise replay the
+     rise-in and make the nav appear to jump. The descendant selector outranks
+     the later `.tab-link { animation: rise-in }` entrance rule. */
   .tab-link { display: none; }
+  .tabs .tab-link { animation: none; }
   .tab-link.active { display: flex; }
   .tab-caret { display: block; }
 
