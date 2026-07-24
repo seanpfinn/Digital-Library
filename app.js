@@ -1443,7 +1443,28 @@ function exploreMessage(html) {
   return box;
 }
 
+/* The category tabs at the top of the Explore page. */
+function renderExploreSubnav() {
+  const nav = document.getElementById('exploreSubnav');
+  nav.innerHTML = '';
+  ITEM_TYPES.forEach((t) => {
+    const on = t.key === currentType;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `subnav-pill${on ? ' active' : ''}`;
+    b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', String(on));
+    const n = books.filter((x) => (x.type || 'book') === t.key).length;
+    b.innerHTML =
+      `<span class="subnav-icon">${t.icon}</span><span>${t.label}</span>` +
+      (n ? `<span class="subnav-count">${n}</span>` : '');
+    b.addEventListener('click', () => { if (t.key !== currentType) setType(t.key); });
+    nav.appendChild(b);
+  });
+}
+
 async function renderExplore() {
+  renderExploreSubnav();
   const type = currentType;
   // Re-render from cache instantly (owned state is recomputed each time).
   if (exploreCache[type]) { renderExploreContent(exploreCache[type]); return; }

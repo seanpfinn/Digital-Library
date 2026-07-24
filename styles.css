@@ -1976,3 +1976,45 @@ body {
   .type-btn span:not(.type-icon) { display: none; } /* icon-only on phones */
   .type-btn { padding: 0 10px; }
 }
+
+/* ---------- Explore category sub-nav ---------- */
+.explore-subnav {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto 26px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.explore-subnav::-webkit-scrollbar { display: none; }
+.subnav-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid #e6e6ee;
+  border-radius: 29px;
+  background: #fff;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  color: #4a4a52;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.subnav-pill:hover { background: #f5f6fb; }
+.subnav-pill.active { background: #004bec; border-color: #004bec; color: #fff; }
+.subnav-icon { font-size: 15px; line-height: 1; }
+.subnav-count {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.7;
+  min-width: 14px;
+  text-align: center;
+}
+.subnav-pill.active .subnav-count { opacity: 0.85; }
