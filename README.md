@@ -14,6 +14,22 @@ python3 -m http.server 8734
 
 Then open <http://localhost:8734>.
 
+## Accounts
+
+- On first load you get a **sign-in / sign-up splash**. Accounts and the current
+  session live in `localStorage`; passwords are SHA-256 hashed so they aren't
+  stored in the clear.
+  - ⚠️ This is a **client-side placeholder** for real auth — it exists so the UI
+    and per-user data model are in place. Swapping in a real backend means
+    turning `Auth`'s methods into API calls; no other code needs to change.
+- **All library data is namespaced per user** (`dl:{userId}:library`, `…:lists`,
+  `…:read`, `…:settings`), so each account is isolated and the layout maps
+  cleanly onto a `user_id`-keyed database later.
+- The header **avatar** opens a **Profile** page: name (editable), email, join
+  date, per-collection-type counts, read/list totals, and **Sign out**.
+- Items now carry a `type` (`book` today; `movie` / `tv` / `game` are scaffolded
+  in the profile counts, ready for those collections to be built next).
+
 ## Features
 
 - **Cover Flow** — click a side cover, use ←/→ arrow keys, scroll/trackpad-swipe,

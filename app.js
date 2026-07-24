@@ -77,10 +77,15 @@ const DEFAULT_BOOKS = [
   },
 ];
 
-const STORAGE_KEY = 'digital-library-custom-books';
-const REMOVED_KEY = 'digital-library-removed';
-const READ_KEY = 'digital-library-read';
-const LISTS_KEY = 'digital-library-lists';
+/* Every default book is a `book`-type item. The library will hold other media
+   types (movie, tv, game) alongside these once those collections are built. */
+const ITEM_TYPES = [
+  { key: 'book', label: 'Books' },
+  { key: 'movie', label: 'Movies' },
+  { key: 'tv', label: 'TV Shows' },
+  { key: 'game', label: 'Games' },
+];
+DEFAULT_BOOKS.forEach((b) => { b.type = 'book'; });
 
 function loadJSON(key, fallback) {
   try {
@@ -98,9 +103,20 @@ function saveJSON(key, value) {
   }
 }
 
-/* Read state (id -> true) and reading lists ([{id, name, bookIds}]). */
-let readStatus = loadJSON(READ_KEY, {});
-let lists = loadJSON(LISTS_KEY, []);
+/* ---------------- Per-user storage ----------------
+   All library data is namespaced under the signed-in user's id, so each
+   account is isolated and the layout maps cleanly onto a `user_id`-keyed
+   database later. Auth itself is a client-side placeholder (see Auth below);
+   real credential checks must live on a server. */
+let currentUser = null;
+function userKey(name) {
+  return `dl:${currentUser ? currentUser.id : 'anon'}:${name}`;
+}
+
+/* These are (re)populated by loadUserData() after sign-in. */
+let removedIds = [];
+let readStatus = {};
+let lists = [];
 
 function isRead(book) {
   return !!readStatus[book.id];
@@ -108,11 +124,11 @@ function isRead(book) {
 function setRead(book, read) {
   if (read) readStatus[book.id] = true;
   else delete readStatus[book.id];
-  saveJSON(READ_KEY, readStatus);
+  saveJSON(userKey('read'), readStatus);
 }
 
 function saveLists() {
-  saveJSON(LISTS_KEY, lists);
+  saveJSON(userKey('lists'), lists);
 }
 function createList(name) {
   const list = { id: `list-${Date.now()}`, name: name.trim() || 'Untitled list', bookIds: [] };
@@ -134,22 +150,10 @@ function listsContaining(book) {
   return lists.filter((l) => l.bookIds.includes(book.id)).length;
 }
 
-function loadCustomBooks() {
-  return loadJSON(STORAGE_KEY, []);
-}
-
-/* Ids of built-in books the reader has taken off the shelf. Removing a
-   custom book just drops it; removing a default one has to be remembered. */
-let removedIds = loadJSON(REMOVED_KEY, []);
-
 function saveCustomBooks() {
   const custom = books.filter((b) => b.custom);
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(custom));
-    localStorage.setItem(REMOVED_KEY, JSON.stringify(removedIds));
-  } catch (e) {
-    console.warn('Could not persist books (storage full?)', e);
-  }
+  saveJSON(userKey('custom-books'), custom);
+  saveJSON(userKey('removed'), removedIds);
 }
 
 function removeBook(id) {
@@ -163,7 +167,7 @@ function removeBook(id) {
 
   // Forget its read state and drop it from any lists.
   delete readStatus[id];
-  saveJSON(READ_KEY, readStatus);
+  saveJSON(userKey('read'), readStatus);
   let listsChanged = false;
   lists.forEach((l) => {
     const j = l.bookIds.indexOf(id);
@@ -178,14 +182,24 @@ function removeBook(id) {
   updateEmptyState();
 }
 
-let books = [
-  ...DEFAULT_BOOKS.filter((b) => !removedIds.includes(b.id)),
-  ...loadCustomBooks(),
-];
-
+/* The library items and shelf position, populated by loadUserData(). */
+let books = [];
 /* Position along the shelf. It counts slots, not books, and is deliberately
    unbounded — the book on screen is slotCursor modulo books.length. */
-let slotCursor = Math.max(0, books.findIndex((b) => b.id === 'inspired'));
+let slotCursor = 0;
+
+/* Load the signed-in user's library, lists, read state and settings. */
+function loadUserData() {
+  removedIds = loadJSON(userKey('removed'), []);
+  const custom = loadJSON(userKey('custom-books'), []);
+  books = [...DEFAULT_BOOKS.filter((b) => !removedIds.includes(b.id)), ...custom];
+  // Older records predate typed items — assume book.
+  books.forEach((b) => { if (!b.type) b.type = 'book'; });
+  readStatus = loadJSON(userKey('read'), {});
+  lists = loadJSON(userKey('lists'), []);
+  settings = { defaultView: 'cover', reflections: true, reduceMotion: false, ...loadJSON(userKey('settings'), {}) };
+  slotCursor = Math.max(0, books.findIndex((b) => b.id === 'inspired'));
+}
 
 /* ============================== Cover Flow ============================== */
 
@@ -816,14 +830,17 @@ const tabIndicator = document.getElementById('tabIndicator');
 /* Slide the underline to sit beneath the active tab. */
 function moveTabIndicator({ animate = true } = {}) {
   const active = tabLinks.find((t) => t.classList.contains('active'));
-  if (!active || !active.offsetParent) return; // nothing shown to measure
-
   if (!animate) tabIndicator.style.transition = 'none';
 
-  const navLeft = tabsNav.getBoundingClientRect().left;
-  const rect = active.getBoundingClientRect();
-  tabIndicator.style.width = `${rect.width}px`;
-  tabIndicator.style.transform = `translateX(${rect.left - navLeft}px)`;
+  // On the profile page no tab is active, so collapse the underline.
+  if (!active || !active.offsetParent) {
+    tabIndicator.style.width = '0px';
+  } else {
+    const navLeft = tabsNav.getBoundingClientRect().left;
+    const rect = active.getBoundingClientRect();
+    tabIndicator.style.width = `${rect.width}px`;
+    tabIndicator.style.transform = `translateX(${rect.left - navLeft}px)`;
+  }
 
   if (!animate) {
     void tabIndicator.offsetWidth; // commit before re-enabling the transition
@@ -835,6 +852,7 @@ const viewCtasEl = document.getElementById('viewCtas');
 const explorePage = document.getElementById('explorePage');
 const listPage = document.getElementById('listPage');
 const settingsPage = document.getElementById('settingsPage');
+const profilePage = document.getElementById('profilePage');
 let currentTab = 'collection';
 
 function setActiveTab(tab) {
@@ -856,6 +874,8 @@ function applyTab() {
   explorePage.hidden = currentTab !== 'explore';
   listPage.hidden = currentTab !== 'list';
   settingsPage.hidden = currentTab !== 'settings';
+  profilePage.hidden = currentTab !== 'profile';
+  avatarBtn.classList.toggle('active', currentTab === 'profile');
   closeTray();
 
   if (isCollection) {
@@ -871,6 +891,7 @@ function applyTab() {
     if (currentTab === 'explore') renderExplore();
     if (currentTab === 'list') renderLists();
     if (currentTab === 'settings') renderSettings();
+    if (currentTab === 'profile') renderProfile();
   }
 }
 
@@ -1069,6 +1090,7 @@ async function addExploreDoc(doc) {
 
   const book = {
     id: `ol:${doc.key}`,
+    type: 'book',
     title: doc.title,
     author: doc.author,
     cover: doc.coverLarge,
@@ -1416,15 +1438,11 @@ function renderLists() {
 
 /* ---------- Settings ---------- */
 
-const SETTINGS_KEY = 'digital-library-settings';
-let settings = { defaultView: 'cover', reflections: true, reduceMotion: false, ...loadJSON(SETTINGS_KEY, {}) };
+/* Populated per-user by loadUserData(). */
+let settings = { defaultView: 'cover', reflections: true, reduceMotion: false };
 
 function saveSettings() {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  } catch (e) {
-    console.warn('Could not persist settings', e);
-  }
+  saveJSON(userKey('settings'), settings);
 }
 
 function applySettings() {
@@ -1450,11 +1468,11 @@ function restoreRemoved() {
 
 function resetLibrary() {
   try {
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem(REMOVED_KEY);
+    localStorage.removeItem(userKey('custom-books'));
+    localStorage.removeItem(userKey('removed'));
   } catch { /* ignore */ }
   removedIds = [];
-  books = [...DEFAULT_BOOKS];
+  books = DEFAULT_BOOKS.map((b) => ({ ...b }));
   slotCursor = 0;
   buildCoverflow();
   updateEmptyState();
@@ -2224,6 +2242,7 @@ errorManualBtn.addEventListener('click', () => showManual(pendingCoverSrc));
 function addBookToLibrary({ title, author, cover }) {
   books.push({
     id: `custom-${Date.now()}`,
+    type: 'book',
     title: title.trim(),
     author: (author || '').trim(),
     cover,
@@ -2264,10 +2283,272 @@ document.addEventListener(
   { passive: false }
 );
 
-/* ============================== Init ============================== */
+/* ============================== Accounts ==============================
+   A deliberately thin, client-side stand-in for real authentication. Users
+   and the current session live in localStorage; passwords are only SHA-256
+   hashed so they aren't stored in the clear. THIS IS NOT SECURE — it exists
+   so the UI and per-user data model are in place. Real credential checks must
+   move to a server, at which point Auth's methods become API calls. */
 
-applySettings();
-buildCoverflow();
-if (settings.defaultView && settings.defaultView !== 'cover') setView(settings.defaultView);
-updateEmptyState();
-moveTabIndicator({ animate: false });
+const AUTH_USERS_KEY = 'dl-users';
+const AUTH_SESSION_KEY = 'dl-session';
+
+async function hashPassword(password) {
+  try {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
+    return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    // Fallback for non-secure contexts — still just a placeholder.
+    let h = 0;
+    for (let i = 0; i < password.length; i++) h = (Math.imul(31, h) + password.charCodeAt(i)) | 0;
+    return `x${h}`;
+  }
+}
+
+const Auth = {
+  all() { return loadJSON(AUTH_USERS_KEY, []); },
+  saveAll(users) { saveJSON(AUTH_USERS_KEY, users); },
+  current() {
+    const id = loadJSON(AUTH_SESSION_KEY, null);
+    return id ? this.all().find((u) => u.id === id) || null : null;
+  },
+  setSession(id) { saveJSON(AUTH_SESSION_KEY, id); },
+  signOut() { localStorage.removeItem(AUTH_SESSION_KEY); },
+
+  async signUp({ name, email, password }) {
+    email = email.trim().toLowerCase();
+    name = name.trim();
+    if (!name) throw new Error('Please enter your name.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Enter a valid email address.');
+    if (password.length < 6) throw new Error('Password must be at least 6 characters.');
+    const users = this.all();
+    if (users.some((u) => u.email === email)) throw new Error('An account with that email already exists.');
+    const user = {
+      id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      email,
+      passwordHash: await hashPassword(password),
+      createdAt: new Date().toISOString(),
+    };
+    users.push(user);
+    this.saveAll(users);
+    this.setSession(user.id);
+    return user;
+  },
+
+  async signIn({ email, password }) {
+    email = email.trim().toLowerCase();
+    const user = this.all().find((u) => u.email === email);
+    if (!user || user.passwordHash !== (await hashPassword(password))) {
+      throw new Error('Wrong email or password.');
+    }
+    this.setSession(user.id);
+    return user;
+  },
+
+  updateName(name) {
+    if (!currentUser) return;
+    const users = this.all();
+    const u = users.find((x) => x.id === currentUser.id);
+    if (u) { u.name = name.trim() || u.name; this.saveAll(users); currentUser = u; }
+  },
+};
+
+/* ============================== Splash / sign-in ============================== */
+
+const splash = document.getElementById('authSplash');
+const authForm = document.getElementById('authForm');
+const authName = document.getElementById('authName');
+const authEmail = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const authError = document.getElementById('authError');
+const authSubmit = document.getElementById('authSubmit');
+const authToggle = document.getElementById('authToggle');
+const authNameField = document.getElementById('authNameField');
+const authTitle = document.getElementById('authTitle');
+const authSubtitle = document.getElementById('authSubtitle');
+
+let authMode = 'signin'; // 'signin' | 'signup'
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const up = mode === 'signup';
+  authNameField.hidden = !up;
+  authName.required = up;
+  authTitle.textContent = up ? 'Create your library' : 'Welcome back';
+  authSubtitle.textContent = up
+    ? 'Sign up to start collecting.'
+    : 'Sign in to your collection.';
+  authSubmit.textContent = up ? 'Sign up' : 'Sign in';
+  authToggle.innerHTML = up
+    ? 'Already have an account? <button type="button" class="auth-link" data-mode="signin">Sign in</button>'
+    : "Don't have an account? <button type=\"button\" class=\"auth-link\" data-mode=\"signup\">Sign up</button>";
+  authError.hidden = true;
+}
+
+authToggle.addEventListener('click', (e) => {
+  const btn = e.target.closest('.auth-link');
+  if (btn) setAuthMode(btn.dataset.mode);
+});
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authError.hidden = true;
+  authSubmit.disabled = true;
+  const prevLabel = authSubmit.textContent;
+  authSubmit.textContent = 'Please wait…';
+  try {
+    const creds = { email: authEmail.value, password: authPassword.value };
+    const user = authMode === 'signup'
+      ? await Auth.signUp({ name: authName.value, ...creds })
+      : await Auth.signIn(creds);
+    startApp(user);
+  } catch (err) {
+    authError.textContent = err.message;
+    authError.hidden = false;
+    authSubmit.disabled = false;
+    authSubmit.textContent = prevLabel;
+  }
+});
+
+function showSplash() {
+  splash.hidden = false;
+  authForm.reset();
+  setAuthMode('signin');
+  authSubmit.disabled = false;
+  // A moment later so the field is focusable after unhide.
+  setTimeout(() => authEmail.focus(), 50);
+}
+
+/* ============================== Profile ============================== */
+
+const avatarBtn = document.getElementById('avatarBtn');
+const profileInner = document.getElementById('profileInner');
+
+avatarBtn.addEventListener('click', () => setActiveTab('profile'));
+
+function initials(name) {
+  return name.trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+}
+
+function renderAvatarButton() {
+  avatarBtn.hidden = !currentUser;
+  if (currentUser) avatarBtn.textContent = initials(currentUser.name);
+}
+
+function renderProfile() {
+  if (!currentUser) return;
+  profileInner.innerHTML = '';
+
+  const header = elem('div', 'profile-head');
+  const av = elem('div', 'profile-avatar');
+  av.textContent = initials(currentUser.name);
+  const idBlock = elem('div', 'profile-id');
+  const nm = elem('h1', 'profile-name');
+  nm.textContent = currentUser.name;
+  const em = elem('p', 'profile-email');
+  em.textContent = currentUser.email;
+  const since = elem('p', 'profile-since');
+  const d = new Date(currentUser.createdAt);
+  since.textContent = `Member since ${d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}`;
+  idBlock.append(nm, em, since);
+  header.append(av, idBlock);
+  profileInner.appendChild(header);
+
+  // Collection counts by type
+  const grid = elem('div', 'profile-stats');
+  ITEM_TYPES.forEach((t) => {
+    const n = books.filter((b) => (b.type || 'book') === t.key).length;
+    const card = elem('div', 'stat-card');
+    const num = elem('div', 'stat-num');
+    num.textContent = n;
+    const lbl = elem('div', 'stat-label');
+    lbl.textContent = t.label;
+    if (t.key !== 'book') card.classList.add('stat-soon');
+    card.append(num, lbl);
+    grid.appendChild(card);
+  });
+  profileInner.appendChild(grid);
+
+  // Secondary stats
+  const readCount = books.filter((b) => isRead(b)).length;
+  const sub = elem('div', 'profile-substats');
+  sub.innerHTML =
+    `<span><strong>${readCount}</strong> read</span>` +
+    `<span><strong>${lists.length}</strong> list${lists.length === 1 ? '' : 's'}</span>`;
+  profileInner.appendChild(sub);
+
+  // Actions
+  const actions = elem('div', 'profile-actions');
+  const rename = elem('button', 'settings-btn');
+  rename.textContent = 'Edit name';
+  rename.addEventListener('click', () => startRename());
+  const signout = elem('button', 'settings-btn danger');
+  signout.textContent = 'Sign out';
+  signout.addEventListener('click', signOutFlow);
+  actions.append(rename, signout);
+  profileInner.appendChild(actions);
+}
+
+function startRename() {
+  const nameEl = profileInner.querySelector('.profile-name');
+  if (!nameEl || nameEl.querySelector('input')) return;
+  const input = document.createElement('input');
+  input.className = 'profile-name-input';
+  input.value = currentUser.name;
+  input.maxLength = 40;
+  const commit = () => {
+    Auth.updateName(input.value);
+    renderAvatarButton();
+    renderProfile();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') commit();
+    if (e.key === 'Escape') renderProfile();
+  });
+  input.addEventListener('blur', commit);
+  nameEl.textContent = '';
+  nameEl.appendChild(input);
+  input.focus();
+  input.select();
+}
+
+function signOutFlow() {
+  Auth.signOut();
+  closeTray();
+  // Wipe in-memory state so nothing leaks to the splash / next account.
+  currentUser = null;
+  books = [];
+  lists = [];
+  readStatus = {};
+  removedIds = [];
+  slotCursor = 0;
+  coverflowEl.innerHTML = '';
+  renderAvatarButton();
+  showSplash();
+}
+
+/* ============================== Boot ============================== */
+
+/* Everything that used to run at load now runs once a user is signed in. */
+function startApp(user) {
+  currentUser = user;
+  loadUserData();
+  applySettings();
+  renderAvatarButton();
+
+  // Reset view state, then build the shelf before anything tries to render it.
+  currentView = 'cover';
+  exploreData = null; // discovery cache is per-account
+  buildCoverflow();
+  setActiveTab('collection');
+  if (settings.defaultView && settings.defaultView !== 'cover') setView(settings.defaultView);
+  moveTabIndicator({ animate: false });
+  splash.hidden = true;
+}
+
+(function boot() {
+  const user = Auth.current();
+  if (user) startApp(user);
+  else showSplash();
+})();
