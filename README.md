@@ -62,8 +62,10 @@ Then open <http://localhost:8734>.
     a "Trending this week" row, and curated themed rows (Product & Startups,
     Focus & Deep Work, Design & Creativity) resolved from seed titles. Each card
     has **+ Add** to pull the book — with its hi-res cover and a fetched
-    synopsis — into your collection; owned books show **✓ In library**. Results
-    are cached per session; failures show a retry. No API key needed.
+    synopsis — into your collection; clicking it again **removes** the book.
+    Tapping a cover or title opens a **preview** (details + synopsis) without
+    adding it. Owned books show **✓ In library**. Results are cached per
+    session; failures show a retry. No API key needed.
   - **Collection** — the Cover Flow shelf and its list/grid views (unchanged).
   - **List** — a placeholder empty state for now; the reading-list UX is next.
   - **Settings** — real, persisted preferences: default Collection view,

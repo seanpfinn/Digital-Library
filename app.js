@@ -531,7 +531,27 @@ trayRemove.addEventListener('click', () => {
 });
 
 /* ----- Read status & lists, in the tray ----- */
+const trayAddPreview = document.getElementById('trayAddPreview');
 const trayStatusEl = document.getElementById('trayStatus');
+
+/* When true, the tray is previewing a book that isn't in the library yet. */
+let trayPreview = false;
+
+/* Adds the previewed book, then re-opens the tray in full (owned) mode. */
+trayAddPreview.addEventListener('click', async () => {
+  if (!trayBook || !trayPreview) return;
+  trayAddPreview.disabled = true;
+  trayAddPreview.textContent = 'Adding…';
+  const doc = {
+    key: trayBook.olKey,
+    title: trayBook.title,
+    author: trayBook.author,
+    coverLarge: trayBook.cover,
+  };
+  const added = await addExploreDoc(doc);
+  if (currentTab === 'explore' && exploreData) renderExploreContent(exploreData);
+  openTray(added); // reopen as a full library entry
+});
 const trayListBtn = document.getElementById('trayListBtn');
 const trayListLabel = document.getElementById('trayListLabel');
 const trayListMenu = document.getElementById('trayListMenu');
@@ -623,17 +643,37 @@ document.addEventListener('click', (e) => {
   }
 });
 
-function openTray(book) {
+function openTray(book, { preview = false } = {}) {
   trayBook = book;
+  trayPreview = preview;
+  trayEl.classList.toggle('tray--preview', preview);
   resetRemoveButton();
   closeTrayListMenu();
-  renderTrayStatus(book);
-  updateTrayListLabel(book);
   trayCover.src = coverSrc(book);
   trayCover.alt = `${book.title} cover`;
   trayTitle.textContent = book.title;
   trayAuthor.textContent = book.author;
-  traySynopsis.textContent = book.synopsis || 'No synopsis saved for this book yet.';
+
+  if (preview) {
+    // Not in the library yet: no status/lists/remove, just an add action.
+    trayAddPreview.hidden = false;
+    trayAddPreview.disabled = false;
+    trayAddPreview.textContent = 'Add to collection';
+    // Descriptions for discovery books are fetched on demand.
+    traySynopsis.textContent = book.synopsis || 'Loading description…';
+    if (!book.synopsis && book.olKey) {
+      olDescription(book.olKey).then((desc) => {
+        if (trayBook === book && trayPreview) {
+          traySynopsis.textContent = desc || 'No description available for this book.';
+        }
+      });
+    }
+  } else {
+    trayAddPreview.hidden = true;
+    renderTrayStatus(book);
+    updateTrayListLabel(book);
+    traySynopsis.textContent = book.synopsis || 'No synopsis saved for this book yet.';
+  }
 
   const query = encodeURIComponent(`${book.title} ${book.author}`.trim());
   trayCtas.innerHTML = '';
@@ -1022,12 +1062,11 @@ async function loadExploreData() {
   return { trending, heroDesc, shelves: shelves.filter((s) => s.items.length) };
 }
 
-async function addFromExplore(doc, btn) {
+/* Add an Open Library discovery doc to the library, returning the new book. */
+async function addExploreDoc(doc) {
   const existing = ownedBookFor(doc);
-  if (existing) { markCardOwned(btn); return; }
+  if (existing) return existing;
 
-  btn.disabled = true;
-  btn.textContent = 'Adding…';
   const book = {
     id: `ol:${doc.key}`,
     title: doc.title,
@@ -1036,23 +1075,35 @@ async function addFromExplore(doc, btn) {
     custom: true,
     source: 'openlibrary',
     olKey: doc.key,
+    synopsis: '',
   };
   book.synopsis = await olDescription(doc.key);
   books.push(book);
   saveCustomBooks();
   buildCoverflow();
   updateEmptyState();
-  markCardOwned(btn);
+  return book;
 }
 
-function markCardOwned(btn) {
-  btn.disabled = true;
-  btn.classList.add('owned');
-  btn.textContent = '✓ In library';
+/* A stand-in book object for previewing a doc that isn't in the library yet. */
+function docToPreviewBook(doc) {
+  return {
+    id: `ol:${doc.key}`,
+    title: doc.title,
+    author: doc.author,
+    cover: doc.coverLarge || doc.coverUrl,
+    olKey: doc.key,
+    source: 'openlibrary',
+  };
+}
+
+function setExploreCardState(btn, owned) {
+  btn.disabled = false;
+  btn.classList.toggle('owned', owned);
+  btn.textContent = owned ? '✓ In library' : '+ Add';
 }
 
 function exploreCard(doc) {
-  const owned = ownedBookFor(doc);
   const item = elem('div', 'shelf-item explore-card');
 
   const img = elem('img');
@@ -1064,22 +1115,33 @@ function exploreCard(doc) {
   const s = elem('span');
   s.textContent = doc.author;
 
-  const btn = elem('button', `explore-add${owned ? ' owned' : ''}`);
+  const btn = elem('button', `explore-add${ownedBookFor(doc) ? ' owned' : ''}`);
   btn.type = 'button';
-  btn.textContent = owned ? '✓ In library' : '+ Add';
-  btn.addEventListener('click', (e) => {
+  btn.textContent = ownedBookFor(doc) ? '✓ In library' : '+ Add';
+
+  // The CTA toggles membership: add if not owned, remove if it is.
+  btn.addEventListener('click', async (e) => {
     e.stopPropagation();
-    const b = ownedBookFor(doc);
-    if (b) openTray(b);
-    else addFromExplore(doc, btn);
+    const owned = ownedBookFor(doc);
+    if (owned) {
+      removeBook(owned.id);
+      setExploreCardState(btn, false);
+    } else {
+      btn.disabled = true;
+      btn.textContent = 'Adding…';
+      await addExploreDoc(doc);
+      setExploreCardState(btn, true);
+    }
   });
 
-  // Tapping the cover opens it if owned, otherwise adds it.
-  img.addEventListener('click', () => {
-    const b = ownedBookFor(doc);
-    if (b) openTray(b);
-    else addFromExplore(doc, btn);
-  });
+  // The cover (and title) show the book's details.
+  const showInfo = () => {
+    const owned = ownedBookFor(doc);
+    if (owned) openTray(owned);
+    else openTray(docToPreviewBook(doc), { preview: true });
+  };
+  img.addEventListener('click', showInfo);
+  t.addEventListener('click', showInfo);
 
   item.append(img, t, s, btn);
   return item;
@@ -1120,13 +1182,32 @@ function renderExploreContent(data) {
     hs.textContent = data.heroDesc || 'A book readers are picking up this week.';
     const hb = elem('button', `explore-hero-btn${owned ? ' owned' : ''}`);
     hb.textContent = owned ? '✓ In library' : '+ Add to collection';
-    const heroAction = () => {
+    const setHeroState = (isOwned) => {
+      hb.disabled = false;
+      hb.classList.toggle('owned', isOwned);
+      hb.textContent = isOwned ? '✓ In library' : '+ Add to collection';
+    };
+    // Button toggles membership; cover/title show the details.
+    hb.addEventListener('click', async () => {
+      const b = ownedBookFor(hero);
+      if (b) {
+        removeBook(b.id);
+        setHeroState(false);
+      } else {
+        hb.disabled = true;
+        hb.textContent = 'Adding…';
+        await addExploreDoc(hero);
+        setHeroState(true);
+      }
+    });
+    const showHeroInfo = () => {
       const b = ownedBookFor(hero);
       if (b) openTray(b);
-      else addFromExplore(hero, hb);
+      else openTray(docToPreviewBook(hero), { preview: true });
     };
-    hb.addEventListener('click', heroAction);
-    cover.addEventListener('click', heroAction);
+    cover.addEventListener('click', showHeroInfo);
+    ht.addEventListener('click', showHeroInfo);
+    ht.style.cursor = 'pointer';
     body.append(eyebrow, ht, ha, hs, hb);
     heroEl.append(cover, body);
     inner.appendChild(heroEl);

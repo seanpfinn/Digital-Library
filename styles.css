@@ -1666,3 +1666,25 @@ body {
 
 .explore-hero-btn.owned { background: #eef1fb; color: #6f6f6f; }
 .explore-hero-btn.owned:hover { background: #eef1fb; transform: none; }
+
+/* ---------- Tray: preview (discovery book not yet in library) ---------- */
+.tray-add-btn {
+  width: 100%;
+  height: 44px;
+  margin-top: 18px;
+  border: none;
+  border-radius: 12px;
+  background: #004bec;
+  color: #fff;
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.tray-add-btn:hover { background: #0038b8; }
+.tray-add-btn:disabled { opacity: 0.6; cursor: default; }
+
+/* In preview there's no read-status, lists, or remove — just details + add. */
+.tray--preview .tray-shelf-actions,
+.tray--preview .tray-remove { display: none; }
