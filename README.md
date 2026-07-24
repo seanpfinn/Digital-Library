@@ -27,8 +27,18 @@ Then open <http://localhost:8734>.
   cleanly onto a `user_id`-keyed database later.
 - The header **avatar** opens a **Profile** page: name (editable), email, join
   date, per-collection-type counts, read/list totals, and **Sign out**.
-- Items now carry a `type` (`book` today; `movie` / `tv` / `game` are scaffolded
-  in the profile counts, ready for those collections to be built next).
+- **Four wired collections** — a type switcher in the nav row flips between
+  **Books, Movies, TV Shows, and Games**. Every view (cover flow, list/grid,
+  Explore, search, tray) filters to the active type, and the type is remembered
+  per account.
+  - **Discovery is keyless** (no API keys needed): Books → Open Library,
+    TV → TVmaze, Games → CheapShark (Steam art), Movies → iTunes best-effort.
+  - Any collection can also be built by hand: the **Add** button opens a quick
+    manual form (title, creator, cover URL) for non-book types, while Books keep
+    the full scan/photo/ISBN flow.
+  - The tray adapts per type: read-status labels (Read / Watched / Played) and
+    where-to-get links (retailers / JustWatch+IMDb / Steam+Metacritic).
+  - Items without artwork fall back to a typed placeholder cover.
 
 ## Features
 

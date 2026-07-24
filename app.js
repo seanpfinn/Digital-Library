@@ -80,12 +80,22 @@ const DEFAULT_BOOKS = [
 /* Every default book is a `book`-type item. The library will hold other media
    types (movie, tv, game) alongside these once those collections are built. */
 const ITEM_TYPES = [
-  { key: 'book', label: 'Books' },
-  { key: 'movie', label: 'Movies' },
-  { key: 'tv', label: 'TV Shows' },
-  { key: 'game', label: 'Games' },
+  { key: 'book', label: 'Books', one: 'book', creator: 'Author', icon: '📚', search: 'Search by author, book, or genre' },
+  { key: 'movie', label: 'Movies', one: 'movie', creator: 'Director', icon: '🎬', search: 'Search movies' },
+  { key: 'tv', label: 'TV Shows', one: 'show', creator: 'Network', icon: '📺', search: 'Search TV shows' },
+  { key: 'game', label: 'Games', one: 'game', creator: 'Studio', icon: '🎮', search: 'Search games' },
 ];
 DEFAULT_BOOKS.forEach((b) => { b.type = 'book'; });
+
+/* The collection type currently on screen. All views filter to it. */
+let currentType = 'book';
+function typeMeta(key) {
+  return ITEM_TYPES.find((t) => t.key === (key || currentType)) || ITEM_TYPES[0];
+}
+/* The items belonging to the active collection type. */
+function collectionItems() {
+  return books.filter((b) => (b.type || 'book') === currentType);
+}
 
 function loadJSON(key, fallback) {
   try {
@@ -176,7 +186,8 @@ function removeBook(id) {
   if (listsChanged) saveLists();
 
   // Keep the shelf pointing at roughly where the reader was looking.
-  if (books.length) slotCursor = Math.max(0, Math.min(slotCursor, books.length - 1));
+  const shown = collectionItems().length;
+  if (shown) slotCursor = Math.max(0, Math.min(slotCursor, shown - 1));
   buildCoverflow();
   if (currentView !== 'cover') renderBrowse();
   updateEmptyState();
@@ -212,11 +223,22 @@ const bookAuthorEl = document.getElementById('bookAuthor');
    keep serving a stale low-resolution copy. */
 const COVER_VERSION = '2';
 
+/* Neutral placeholder for items added without artwork. */
+function placeholderCover(book) {
+  const icon = typeMeta(book && book.type).icon;
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='444'>` +
+    `<rect width='300' height='444' fill='%23eceef4'/>` +
+    `<text x='150' y='236' font-size='96' text-anchor='middle'>${icon}</text></svg>`;
+  return `data:image/svg+xml,${svg}`;
+}
+
 function coverSrc(book) {
   const cover = book.cover || '';
+  if (!cover) return placeholderCover(book);
   // Data URLs (captured photos) and remote URLs are used as-is; only the
   // bundled covers/ files get the cache-busting version query.
-  if (!cover || cover.startsWith('data:') || /^https?:/.test(cover)) return cover;
+  if (cover.startsWith('data:') || /^https?:/.test(cover)) return cover;
   return `${cover}?v=${COVER_VERSION}`;
 }
 
@@ -225,7 +247,8 @@ function coverSrc(book) {
 let slotCount = 0;
 
 function currentBookIndex() {
-  const n = books.length;
+  const n = collectionItems().length;
+  if (!n) return 0;
   return ((slotCursor % n) + n) % n;
 }
 
@@ -267,21 +290,22 @@ function wrapOffset(d) {
 }
 
 function buildCoverflow() {
-  const n = books.length;
+  const items = collectionItems();
+  const n = items.length;
   if (!n) {
     coverflowEl.innerHTML = '';
     slotCount = 0;
     return;
   }
   const { offscreen } = shelfMetrics();
-  // Enough whole copies of the library to fill the screen and still leave
+  // Enough whole copies of the collection to fill the screen and still leave
   // hidden slots either side for recycling.
   const copies = Math.max(1, Math.ceil((2 * offscreen + 1) / n));
   slotCount = n * copies;
 
   coverflowEl.innerHTML = '';
   for (let slot = 0; slot < slotCount; slot++) {
-    const book = books[slot % n];
+    const book = items[slot % n];
     const el = document.createElement('div');
     el.className = 'book';
     el.dataset.slot = slot;
@@ -305,7 +329,7 @@ function buildCoverflow() {
     el.appendChild(reflection);
     // A side cover steps the shelf along; the centre one opens its details.
     el.addEventListener('click', () => {
-      if (wrapOffset(slot - slotCursor) === 0) openTray(books[slot % n]);
+      if (wrapOffset(slot - slotCursor) === 0) openTray(collectionItems()[slot % n]);
       else goToSlot(slot);
     });
     coverflowEl.appendChild(el);
@@ -314,7 +338,8 @@ function buildCoverflow() {
 }
 
 function layout() {
-  if (!books.length || !slotCount) return;
+  const items = collectionItems();
+  if (!items.length || !slotCount) return;
   const { firstOffset, step, offscreen } = shelfMetrics();
   const sideAngle = 42;
 
@@ -345,8 +370,8 @@ function layout() {
     }
   });
 
-  const book = books[currentBookIndex()];
-  if (bookTitleEl.textContent !== book.title) {
+  const book = items[currentBookIndex()];
+  if (book && bookTitleEl.textContent !== book.title) {
     bookTitleEl.textContent = book.title;
     bookAuthorEl.textContent = book.author;
     // Restart the cross-fade: drop the class, force a reflow, re-add it.
@@ -426,10 +451,15 @@ function goToSlot(slot) {
   shuttleBy(wrapOffset(slot - slotCursor));
 }
 
-/* Bring a specific book to the centre, travelling the short way. */
-function selectBook(bookIndex) {
-  const n = books.length;
-  let delta = (((bookIndex - currentBookIndex()) % n) + n) % n;
+/* Bring a specific item to the centre, travelling the short way. Accepts the
+   item (preferred) or its index within the current collection. */
+function selectBook(itemOrIndex) {
+  const items = collectionItems();
+  const n = items.length;
+  if (!n) return;
+  const idx = typeof itemOrIndex === 'number' ? itemOrIndex : items.indexOf(itemOrIndex);
+  if (idx < 0) return;
+  let delta = (((idx - currentBookIndex()) % n) + n) % n;
   if (delta > n / 2) delta -= n;
   shuttleBy(delta);
 }
@@ -482,8 +512,10 @@ stage.addEventListener('pointercancel', () => (dragStartX = null));
 
 /* A wider window needs more slots before recycling is safely out of sight. */
 window.addEventListener('resize', () => {
+  const n = collectionItems().length;
+  if (!n) return;
   const { offscreen } = shelfMetrics();
-  const needed = books.length * Math.max(1, Math.ceil((2 * offscreen + 1) / books.length));
+  const needed = n * Math.max(1, Math.ceil((2 * offscreen + 1) / n));
   if (needed !== slotCount) buildCoverflow();
   else layout();
 });
@@ -500,12 +532,39 @@ const trayCtas = document.getElementById('trayCtas');
 
 /* Search links rather than direct product URLs — a search always resolves,
    where a hardcoded product id would rot or point at the wrong edition. */
-const RETAILERS = [
-  { label: 'Buy on Amazon', primary: true, url: (q) => `https://www.amazon.com/s?k=${q}&i=stripbooks` },
-  { label: 'Apple Books', url: (q) => `https://books.apple.com/us/search?term=${q}` },
-  { label: 'Bookshop.org', url: (q) => `https://bookshop.org/search?keywords=${q}` },
-  { label: 'Borrow on Open Library', url: (q) => `https://openlibrary.org/search?q=${q}` },
-];
+/* Where-to-get links per collection type (all search links, so they resolve). */
+const TYPE_LINKS = {
+  book: [
+    { label: 'Buy on Amazon', primary: true, url: (q) => `https://www.amazon.com/s?k=${q}&i=stripbooks` },
+    { label: 'Apple Books', url: (q) => `https://books.apple.com/us/search?term=${q}` },
+    { label: 'Bookshop.org', url: (q) => `https://bookshop.org/search?keywords=${q}` },
+    { label: 'Open Library', url: (q) => `https://openlibrary.org/search?q=${q}` },
+  ],
+  movie: [
+    { label: 'Where to watch', primary: true, url: (q) => `https://www.justwatch.com/us/search?q=${q}` },
+    { label: 'IMDb', url: (q) => `https://www.imdb.com/find/?q=${q}` },
+    { label: 'Letterboxd', url: (q) => `https://letterboxd.com/search/${q}/` },
+  ],
+  tv: [
+    { label: 'Where to watch', primary: true, url: (q) => `https://www.justwatch.com/us/search?q=${q}` },
+    { label: 'IMDb', url: (q) => `https://www.imdb.com/find/?q=${q}` },
+    { label: 'TVmaze', url: (q) => `https://www.tvmaze.com/search?q=${q}` },
+  ],
+  game: [
+    { label: 'Best price', primary: true, url: (q) => `https://www.cheapshark.com/browse?title=${q}` },
+    { label: 'Steam', url: (q) => `https://store.steampowered.com/search/?term=${q}` },
+    { label: 'Metacritic', url: (q) => `https://www.metacritic.com/search/${q}/` },
+  ],
+};
+function typeLinks(type) { return TYPE_LINKS[type] || TYPE_LINKS.book; }
+
+/* Read-status labels per type (done vs. not done). */
+const STATUS_LABELS = {
+  book: ['Unread', 'Read'],
+  movie: ['Unwatched', 'Watched'],
+  tv: ['Unwatched', 'Watched'],
+  game: ['Unplayed', 'Played'],
+};
 
 const trayRemove = document.getElementById('trayRemove');
 const emptyShelf = document.getElementById('emptyShelf');
@@ -520,10 +579,22 @@ function updateEmptyState() {
     browseEl.hidden = true;
     return;
   }
-  const empty = books.length === 0;
+  const empty = collectionItems().length === 0;
   emptyShelf.hidden = !empty;
+  if (empty) emptyShelf.innerHTML = emptyCollectionHTML();
   stageEl.hidden = empty || currentView !== 'cover';
   browseEl.hidden = empty || currentView === 'cover';
+}
+
+/* Empty-collection message tailored to the active type. */
+function emptyCollectionHTML() {
+  const m = typeMeta();
+  return `Your ${m.label.toLowerCase()} collection is empty. ` +
+    `Use <strong>Explore</strong> or <strong>${addLabel()}</strong> to add ${m.label.toLowerCase()}.`;
+}
+function addLabel() {
+  const m = typeMeta();
+  return `Add ${m.one}`;
 }
 
 function resetRemoveButton() {
@@ -556,14 +627,17 @@ trayAddPreview.addEventListener('click', async () => {
   if (!trayBook || !trayPreview) return;
   trayAddPreview.disabled = true;
   trayAddPreview.textContent = 'Adding…';
+  const type = trayBook.type || 'book';
   const doc = {
-    key: trayBook.olKey,
+    type,
+    key: trayBook.olKey || (trayBook.id.includes(':') ? trayBook.id.split(':').slice(1).join(':') : trayBook.id),
     title: trayBook.title,
     author: trayBook.author,
     coverLarge: trayBook.cover,
+    synopsis: trayBook.synopsis || '',
   };
   const added = await addExploreDoc(doc);
-  if (currentTab === 'explore' && exploreData) renderExploreContent(exploreData);
+  if (currentTab === 'explore' && exploreCache[currentType]) renderExploreContent(exploreCache[currentType]);
   openTray(added); // reopen as a full library entry
 });
 const trayListBtn = document.getElementById('trayListBtn');
@@ -572,8 +646,11 @@ const trayListMenu = document.getElementById('trayListMenu');
 
 function renderTrayStatus(book) {
   const read = isRead(book);
+  const labels = STATUS_LABELS[book.type || 'book'] || STATUS_LABELS.book;
   trayStatusEl.querySelectorAll('button').forEach((b) => {
-    b.classList.toggle('active', (b.dataset.read === 'true') === read);
+    const on = b.dataset.read === 'true';
+    b.textContent = on ? labels[1] : labels[0];
+    b.classList.toggle('active', on === read);
   });
 }
 
@@ -691,7 +768,7 @@ function openTray(book, { preview = false } = {}) {
 
   const query = encodeURIComponent(`${book.title} ${book.author}`.trim());
   trayCtas.innerHTML = '';
-  RETAILERS.forEach((r) => {
+  typeLinks(book.type || 'book').forEach((r) => {
     const a = document.createElement('a');
     a.className = `glass tray-cta${r.primary ? ' primary' : ''}`;
     a.href = r.url(query);
@@ -749,12 +826,13 @@ const searchInput = document.getElementById('searchInput');
 
 let currentView = 'cover';
 
-/* Books matching the current search, or all of them when the box is empty. */
+/* Items in the active collection matching the search (or all when empty). */
 function visibleBooks() {
   const q = searchInput.value.trim().toLowerCase();
-  if (!q) return books;
-  return books.filter(
-    (b) => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q)
+  const items = collectionItems();
+  if (!q) return items;
+  return items.filter(
+    (b) => b.title.toLowerCase().includes(q) || (b.author || '').toLowerCase().includes(q)
   );
 }
 
@@ -788,7 +866,7 @@ function renderBrowse() {
     if (isRead(book)) item.appendChild(readBadge());
     // Centre it on the shelf behind us, and show its details
     item.addEventListener('click', () => {
-      selectBook(books.indexOf(book));
+      selectBook(book);
       openTray(book);
     });
     browseInner.appendChild(item);
@@ -880,7 +958,7 @@ function applyTab() {
 
   if (isCollection) {
     updateEmptyState();
-    if (books.length) {
+    if (collectionItems().length) {
       if (currentView === 'cover') replayShelf();
       else renderBrowse();
     }
@@ -968,7 +1046,7 @@ searchInput.addEventListener('input', () => {
   }
   if (currentView === 'cover') {
     const match = visibleBooks()[0];
-    if (match && searchInput.value.trim()) selectBook(books.indexOf(match));
+    if (match && searchInput.value.trim()) selectBook(match);
   } else {
     renderBrowse();
   }
@@ -1011,11 +1089,13 @@ const olCover = (id, size) => `https://covers.openlibrary.org/b/id/${id}-${size}
 function normalizeOlWork(w) {
   const id = w.cover_i || w.cover_id;
   return {
+    type: 'book',
     key: w.key,
     title: w.title,
     author: (w.author_name && w.author_name[0]) || (w.authors && w.authors[0] && w.authors[0].name) || '',
     coverUrl: olCover(id, 'M'),
     coverLarge: olCover(id, 'L'),
+    synopsis: '',
   };
 }
 
@@ -1062,60 +1142,172 @@ async function olDescription(workKey) {
   }
 }
 
-/* A book counts as "in your library" if its work key or title already matches. */
-function ownedBookFor(doc) {
-  const t = doc.title.toLowerCase();
-  return books.find((b) => b.olKey === doc.key || b.title.toLowerCase() === t);
+/* ---------------- Discovery sources for the other media types ----------------
+   All keyless and CORS-friendly. Each returns the same normalized doc shape:
+   { type, key, title, author, coverUrl, coverLarge, synopsis }. */
+
+async function tvmazeSearchOne(query) {
+  try {
+    const res = await fetch(`https://api.tvmaze.com/search/shows?q=${encodeURIComponent(query)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hit = (data || []).find((x) => x.show && x.show.image);
+    if (!hit) return null;
+    const s = hit.show;
+    const img = s.image.medium || s.image.original;
+    return {
+      type: 'tv',
+      key: `tvmaze:${s.id}`,
+      title: s.name,
+      author: (s.network && s.network.name) || (s.webChannel && s.webChannel.name) || '',
+      coverUrl: img,
+      coverLarge: s.image.original || img,
+      synopsis: (s.summary || '').replace(/<[^>]*>/g, '').trim(),
+    };
+  } catch { return null; }
 }
 
-let exploreData = null;   // cached discovery results
-let exploreToken = 0;     // guards against a stale async render
+async function cheapsharkSearchOne(query) {
+  try {
+    const res = await fetch(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(query)}&limit=5`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const g = (data || []).find((x) => x.thumb && x.external);
+    if (!g) return null;
+    // Upgrade the small Steam capsule to the wider header image where possible.
+    const large = g.thumb.replace(/capsule_sm_120/, 'header');
+    return {
+      type: 'game',
+      key: `cheapshark:${g.gameID}`,
+      title: g.external,
+      author: '',
+      coverUrl: g.thumb,
+      coverLarge: large,
+      synopsis: '',
+    };
+  } catch { return null; }
+}
 
-async function loadExploreData() {
-  const trending = await olTrending('weekly', 16);
-  const heroDesc = trending[0] ? await olDescription(trending[0].key) : '';
+async function itunesMovieSearchOne(query) {
+  try {
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=movie&limit=3`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const r = (data.results || []).find((x) => x.artworkUrl100);
+    if (!r) return null;
+    return {
+      type: 'movie',
+      key: `itunes:${r.trackId}`,
+      title: r.trackName,
+      author: r.artistName || '',
+      coverUrl: r.artworkUrl100,
+      coverLarge: r.artworkUrl100.replace('100x100bb', '600x600bb'),
+      synopsis: r.longDescription || r.shortDescription || '',
+    };
+  } catch { return null; }
+}
+
+const TV_THEMES = [
+  { title: 'Acclaimed drama', seeds: ['Breaking Bad', 'The Wire', 'Mad Men', 'Succession', 'The Sopranos'] },
+  { title: 'Sci-fi & fantasy', seeds: ['Severance', 'Stranger Things', 'The Expanse', 'Black Mirror', 'Game of Thrones'] },
+  { title: 'Comedy', seeds: ['Ted Lasso', 'The Office', 'Fleabag', 'Parks and Recreation', 'Arrested Development'] },
+];
+const GAME_THEMES = [
+  { title: 'Modern classics', seeds: ['The Legend of Zelda Breath of the Wild', 'Elden Ring', 'God of War', 'Red Dead Redemption 2', 'Hades'] },
+  { title: 'Indie gems', seeds: ['Hollow Knight', 'Celeste', 'Stardew Valley', 'Disco Elysium', 'Outer Wilds'] },
+  { title: 'Adventures', seeds: ["Baldur's Gate 3", 'Cyberpunk 2077', 'Portal 2', 'The Witcher 3', 'It Takes Two'] },
+];
+const MOVIE_THEMES = [
+  { title: 'Modern favourites', seeds: ['Inception', 'Interstellar', 'Parasite', 'Dune', 'Everything Everywhere All at Once'] },
+  { title: 'Animation', seeds: ['Into the Spider-Verse', 'Spirited Away', 'Coco', 'Toy Story', 'The Iron Giant'] },
+];
+
+const DISCOVERY = {
+  book: { search: olSearchOne, themes: EXPLORE_THEMES, source: 'Open Library' },
+  tv: { search: tvmazeSearchOne, themes: TV_THEMES, source: 'TVmaze' },
+  game: { search: cheapsharkSearchOne, themes: GAME_THEMES, source: 'CheapShark' },
+  movie: { search: itunesMovieSearchOne, themes: MOVIE_THEMES, source: 'iTunes' },
+};
+
+/* An item counts as owned if a same-type item shares its id, key or title. */
+function ownedItemFor(doc) {
+  const t = doc.title.toLowerCase();
+  return books.find((b) =>
+    (b.type || 'book') === doc.type && (
+      b.id === `${doc.type}:${doc.key}` ||
+      (doc.type === 'book' && b.olKey === doc.key) ||
+      b.title.toLowerCase() === t
+    ));
+}
+/* Kept for older call sites. */
+function ownedBookFor(doc) { return ownedItemFor(doc); }
+
+let exploreCache = {};   // discovery results, keyed by type
+let exploreToken = 0;    // guards against a stale async render
+
+async function themedShelves(cfg) {
   const shelves = await Promise.all(
-    EXPLORE_THEMES.map(async (theme) => ({
+    cfg.themes.map(async (theme) => ({
       title: theme.title,
-      items: (await Promise.all(theme.seeds.map(olSearchOne))).filter(Boolean),
+      items: (await Promise.all(theme.seeds.map(cfg.search))).filter(Boolean),
     }))
   );
-  return { trending, heroDesc, shelves: shelves.filter((s) => s.items.length) };
+  return shelves.filter((s) => s.items.length);
 }
 
-/* Add an Open Library discovery doc to the library, returning the new book. */
+async function loadExplore(type) {
+  const cfg = DISCOVERY[type];
+  const shelves = await themedShelves(cfg);
+
+  if (type === 'book') {
+    let trending = [];
+    try { trending = await olTrending('weekly', 16); } catch { /* fall back to shelves */ }
+    const hero = trending[0] || (shelves[0] && shelves[0].items[0]) || null;
+    const heroDesc = hero && hero.type === 'book' ? await olDescription(hero.key) : (hero && hero.synopsis) || '';
+    return { hero, heroDesc, trendingRow: trending.slice(1), shelves };
+  }
+
+  const hero = (shelves[0] && shelves[0].items[0]) || null;
+  return { hero, heroDesc: (hero && hero.synopsis) || '', trendingRow: [], shelves };
+}
+
+/* Add a discovery doc to the library, returning the new item. */
 async function addExploreDoc(doc) {
-  const existing = ownedBookFor(doc);
+  const existing = ownedItemFor(doc);
   if (existing) return existing;
 
-  const book = {
-    id: `ol:${doc.key}`,
-    type: 'book',
+  const item = {
+    id: `${doc.type}:${doc.key}`,
+    type: doc.type,
     title: doc.title,
-    author: doc.author,
-    cover: doc.coverLarge,
+    author: doc.author || '',
+    cover: doc.coverLarge || doc.coverUrl,
     custom: true,
-    source: 'openlibrary',
-    olKey: doc.key,
-    synopsis: '',
+    source: (doc.key.split(':')[0]) || 'web',
+    synopsis: doc.synopsis || '',
   };
-  book.synopsis = await olDescription(doc.key);
-  books.push(book);
+  if (doc.type === 'book') {
+    item.olKey = doc.key;
+    item.source = 'openlibrary';
+    item.synopsis = await olDescription(doc.key);
+  }
+  books.push(item);
   saveCustomBooks();
   buildCoverflow();
   updateEmptyState();
-  return book;
+  return item;
 }
 
-/* A stand-in book object for previewing a doc that isn't in the library yet. */
+/* A stand-in item for previewing a doc that isn't in the library yet. */
 function docToPreviewBook(doc) {
   return {
-    id: `ol:${doc.key}`,
+    id: `${doc.type}:${doc.key}`,
+    type: doc.type,
     title: doc.title,
-    author: doc.author,
+    author: doc.author || '',
     cover: doc.coverLarge || doc.coverUrl,
-    olKey: doc.key,
-    source: 'openlibrary',
+    synopsis: doc.synopsis || '',
+    olKey: doc.type === 'book' ? doc.key : undefined,
   };
 }
 
@@ -1185,9 +1377,9 @@ function renderExploreContent(data) {
   const inner = document.getElementById('exploreInner');
   inner.innerHTML = '';
 
-  const hero = data.trending[0];
+  const hero = data.hero;
   if (hero) {
-    const owned = ownedBookFor(hero);
+    const owned = ownedItemFor(hero);
     const heroEl = elem('div', 'explore-hero');
     const cover = elem('img', 'explore-hero-cover');
     cover.src = hero.coverLarge;
@@ -1195,13 +1387,13 @@ function renderExploreContent(data) {
 
     const body = elem('div', 'explore-hero-body');
     const eyebrow = elem('p', 'explore-eyebrow');
-    eyebrow.textContent = 'Trending now';
+    eyebrow.textContent = currentType === 'book' ? 'Trending now' : 'Featured';
     const ht = elem('h3', 'explore-hero-title');
     ht.textContent = hero.title;
     const ha = elem('p', 'explore-hero-author');
     ha.textContent = hero.author;
     const hs = elem('p', 'explore-hero-synopsis');
-    hs.textContent = data.heroDesc || 'A book readers are picking up this week.';
+    hs.textContent = data.heroDesc || `A ${typeMeta().one} worth discovering.`;
     const hb = elem('button', `explore-hero-btn${owned ? ' owned' : ''}`);
     hb.textContent = owned ? '✓ In library' : '+ Add to collection';
     const setHeroState = (isOwned) => {
@@ -1235,8 +1427,9 @@ function renderExploreContent(data) {
     inner.appendChild(heroEl);
   }
 
-  const trendingRest = data.trending.slice(1);
-  if (trendingRest.length) inner.appendChild(exploreShelf('Trending this week', trendingRest));
+  if (data.trendingRow && data.trendingRow.length) {
+    inner.appendChild(exploreShelf('Trending this week', data.trendingRow));
+  }
   data.shelves.forEach((s) => inner.appendChild(exploreShelf(s.title, s.items)));
 }
 
@@ -1251,27 +1444,36 @@ function exploreMessage(html) {
 }
 
 async function renderExplore() {
+  const type = currentType;
   // Re-render from cache instantly (owned state is recomputed each time).
-  if (exploreData) { renderExploreContent(exploreData); return; }
+  if (exploreCache[type]) { renderExploreContent(exploreCache[type]); return; }
 
+  const m = typeMeta(type);
   const token = ++exploreToken;
   const inner = document.getElementById('exploreInner');
-  inner.innerHTML = '<div class="explore-loading"><span class="spinner"></span><p>Finding books to explore…</p></div>';
+  inner.innerHTML = `<div class="explore-loading"><span class="spinner"></span><p>Finding ${m.label.toLowerCase()} to explore…</p></div>`;
 
   try {
-    const data = await loadExploreData();
-    if (token !== exploreToken || currentTab !== 'explore') return;
-    if (!data.trending.length && !data.shelves.length) {
-      exploreMessage("<h2>Nothing to show right now</h2><p>Open Library didn't return any books. Try again in a moment.</p>");
+    const data = await loadExplore(type);
+    if (token !== exploreToken || currentTab !== 'explore' || currentType !== type) return;
+    if (!data.hero && !data.shelves.length) {
+      const box = exploreMessage(
+        `<h2>No ${m.label.toLowerCase()} to show</h2>` +
+        `<p>Discovery didn't return anything. You can still add ${m.label.toLowerCase()} with <strong>${addLabel()}</strong>.</p>`
+      );
+      const add = elem('button', 'explore-hero-btn');
+      add.textContent = addLabel();
+      add.addEventListener('click', openAddFlow);
+      box.appendChild(add);
       return;
     }
-    exploreData = data;
+    exploreCache[type] = data;
     renderExploreContent(data);
   } catch (err) {
     console.warn('Explore load failed:', err);
-    if (token !== exploreToken || currentTab !== 'explore') return;
+    if (token !== exploreToken || currentTab !== 'explore' || currentType !== type) return;
     const box = exploreMessage(
-      "<h2>Couldn't reach Open Library</h2><p>Check your connection and try again.</p>"
+      `<h2>Couldn't reach ${DISCOVERY[type].source}</h2><p>Check your connection and try again.</p>`
     );
     const retry = elem('button', 'explore-hero-btn');
     retry.textContent = 'Try again';
@@ -1629,6 +1831,114 @@ function renderSettings() {
   inner.appendChild(about);
 }
 
+/* ============================== Collection-type switcher ============================== */
+
+const typeBtn = document.getElementById('typeBtn');
+const typeMenu = document.getElementById('typeMenu');
+const typeLabel = document.getElementById('typeLabel');
+const typeIcon = document.getElementById('typeIcon');
+
+/* Reflect the active type in the header chrome. */
+function reflectType() {
+  const m = typeMeta();
+  typeLabel.textContent = m.label;
+  typeIcon.textContent = m.icon;
+  searchInput.placeholder = m.search;
+  searchInput.setAttribute('aria-label', m.search);
+  addBtn.textContent = addLabel();
+}
+
+function renderTypeMenu() {
+  typeMenu.innerHTML = '';
+  ITEM_TYPES.forEach((t) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `type-item${t.key === currentType ? ' current' : ''}`;
+    const n = books.filter((x) => (x.type || 'book') === t.key).length;
+    b.innerHTML = `<span class="type-item-icon">${t.icon}</span><span class="type-item-name">${t.label}</span><span class="type-item-count">${n || ''}</span>`;
+    b.addEventListener('click', (e) => { e.stopPropagation(); closeTypeMenu(); setType(t.key); });
+    typeMenu.appendChild(b);
+  });
+}
+function openTypeMenu() { renderTypeMenu(); typeMenu.hidden = false; typeBtn.setAttribute('aria-expanded', 'true'); }
+function closeTypeMenu() { typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false'); }
+typeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (typeMenu.hidden) openTypeMenu(); else closeTypeMenu(); });
+document.addEventListener('click', (e) => {
+  if (!typeMenu.hidden && !typeMenu.contains(e.target) && !typeBtn.contains(e.target)) closeTypeMenu();
+});
+
+function setType(key) {
+  if (key === currentType) return;
+  currentType = key;
+  settings.currentType = key;
+  saveSettings();
+  slotCursor = 0;
+  currentView = 'cover';
+  document.querySelectorAll('.view-cta').forEach((b) => {
+    const on = b.dataset.view === 'cover';
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  reflectType();
+  buildCoverflow();
+  applyTab(); // re-render whichever tab is showing, for the new type
+}
+
+/* ============================== Generic manual add ============================== */
+
+const manualBackdrop = document.getElementById('manualBackdrop');
+const manualTitle = document.getElementById('manualTitle');
+const manualTitleInput = document.getElementById('manualTitleInput');
+const manualCreatorInput = document.getElementById('manualCreatorInput');
+const manualCoverInput = document.getElementById('manualCoverInput');
+const manualSynopsis = document.getElementById('manualSynopsis');
+const manualStatus = document.getElementById('manualStatus');
+const manualAddBtn = document.getElementById('manualAddBtn');
+
+function openManualModal() {
+  const m = typeMeta();
+  manualTitle.textContent = addLabel();
+  manualTitleInput.value = '';
+  manualCreatorInput.value = '';
+  manualCoverInput.value = '';
+  manualSynopsis.value = '';
+  manualCreatorInput.placeholder = m.creator;
+  manualStatus.hidden = true;
+  manualBackdrop.hidden = false;
+  setTimeout(() => manualTitleInput.focus(), 40);
+}
+function closeManualModal() { manualBackdrop.hidden = true; }
+
+document.getElementById('manualClose').addEventListener('click', closeManualModal);
+manualBackdrop.addEventListener('click', (e) => { if (e.target === manualBackdrop) closeManualModal(); });
+
+manualAddBtn.addEventListener('click', () => {
+  const title = manualTitleInput.value.trim();
+  if (!title) {
+    manualStatus.textContent = 'A title is required.';
+    manualStatus.hidden = false;
+    manualStatus.classList.add('error');
+    manualTitleInput.focus();
+    return;
+  }
+  const item = {
+    id: `custom-${Date.now()}`,
+    type: currentType,
+    title,
+    author: manualCreatorInput.value.trim(),
+    cover: manualCoverInput.value.trim(),
+    synopsis: manualSynopsis.value.trim(),
+    custom: true,
+  };
+  books.push(item);
+  saveCustomBooks();
+  buildCoverflow();
+  updateEmptyState();
+  selectBook(item);
+  if (currentView !== 'cover') renderBrowse();
+  closeManualModal();
+});
+
 /* ============================== Add-book modal ============================== */
 
 const modalBackdrop = document.getElementById('modalBackdrop');
@@ -1724,7 +2034,12 @@ function closeModal() {
   stopCamera();
 }
 
-addBtn.addEventListener('click', openModal);
+/* Books get the full scan/photo/ISBN modal; other types get a quick manual add. */
+function openAddFlow() {
+  if (currentType === 'book') openModal();
+  else openManualModal();
+}
+addBtn.addEventListener('click', openAddFlow);
 modalClose.addEventListener('click', closeModal);
 modalBackdrop.addEventListener('click', (e) => {
   if (e.target === modalBackdrop) closeModal();
@@ -2251,7 +2566,7 @@ function addBookToLibrary({ title, author, cover }) {
   saveCustomBooks();
   buildCoverflow();
   updateEmptyState();
-  selectBook(books.length - 1);
+  selectBook(books[books.length - 1]);
   if (currentView !== 'cover') renderBrowse();
   closeModal();
 }
@@ -2539,7 +2854,10 @@ function startApp(user) {
 
   // Reset view state, then build the shelf before anything tries to render it.
   currentView = 'cover';
-  exploreData = null; // discovery cache is per-account
+  currentType = settings.currentType && ITEM_TYPES.some((t) => t.key === settings.currentType)
+    ? settings.currentType : 'book';
+  exploreCache = {}; // discovery cache is per-account
+  reflectType();
   buildCoverflow();
   setActiveTab('collection');
   if (settings.defaultView && settings.defaultView !== 'cover') setView(settings.defaultView);

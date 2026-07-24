@@ -40,6 +40,15 @@
     </div>
 
     <div class="nav-row">
+     <div class="nav-left">
+      <div class="type-switch">
+        <button class="type-btn glass" id="typeBtn" aria-haspopup="menu" aria-expanded="false">
+          <span class="type-icon" id="typeIcon">📚</span>
+          <span id="typeLabel">Books</span>
+          <img class="type-caret" src="assets/caret-down.svg" alt="" />
+        </button>
+        <div class="type-menu glass glass--static" id="typeMenu" role="menu" hidden></div>
+      </div>
       <nav class="tabs" id="tabsNav">
         <button class="tab-link" data-tab="explore" data-label="Explore">
           Explore<img class="tab-caret" src="assets/caret-down.svg" alt="" />
@@ -56,6 +65,7 @@
         <span class="tab-indicator" id="tabIndicator" aria-hidden="true"></span>
         <div class="tab-menu glass glass--static" id="tabMenu" role="menu" hidden></div>
       </nav>
+     </div>
 
       <div class="view-ctas" id="viewCtas" role="group" aria-label="View">
         <button class="glass view-cta active" data-view="cover" aria-label="Cover view" title="Cover view" aria-pressed="true">
@@ -241,6 +251,24 @@
   </div>
 
   <canvas id="captureCanvas" hidden></canvas>
+
+  <!-- Generic manual add (non-book collections) -->
+  <div class="modal-backdrop" id="manualBackdrop" hidden>
+    <div class="modal manual-modal" role="dialog" aria-modal="true" aria-labelledby="manualTitle">
+      <div class="modal-header">
+        <h2 id="manualTitle">Add item</h2>
+        <button class="modal-close" id="manualClose" aria-label="Close">&times;</button>
+      </div>
+      <div class="manual-fields">
+        <input type="text" id="manualTitleInput" placeholder="Title" />
+        <input type="text" id="manualCreatorInput" placeholder="Creator" />
+        <input type="url" id="manualCoverInput" placeholder="Cover image URL (optional)" />
+        <textarea id="manualSynopsis" placeholder="Notes or synopsis (optional)" rows="3"></textarea>
+        <p class="modal-status" id="manualStatus" hidden></p>
+        <button class="btn primary" id="manualAddBtn">Add</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Sign in / sign up splash -->
   <div class="auth-splash" id="authSplash" hidden>
