@@ -22,15 +22,23 @@ Then open <http://localhost:8734>.
   - ⚠️ This is a **client-side placeholder** for real auth — it exists so the UI
     and per-user data model are in place. Swapping in a real backend means
     turning `Auth`'s methods into API calls; no other code needs to change.
+  - **Accounts do not sync across devices** (they live in each browser's
+    `localStorage`). An account created on your computer will not exist on your
+    phone — that only works once there's a real backend. Passwords are hashed
+    with a portable hash so same-device sign-in works whether the page is opened
+    via `localhost` or a `http://<ip>` address.
 - **All library data is namespaced per user** (`dl:{userId}:library`, `…:lists`,
   `…:read`, `…:settings`), so each account is isolated and the layout maps
   cleanly onto a `user_id`-keyed database later.
 - The header **avatar** opens a **Profile** page: name (editable), email, join
   date, per-collection-type counts, read/list totals, and **Sign out**.
-- **Four wired collections** — a type switcher in the nav row flips between
-  **Books, Movies, TV Shows, and Games**. Every view (cover flow, list/grid,
-  Explore, search, tray) filters to the active type, and the type is remembered
-  per account.
+- **Four wired collections** — **Books, Movies, TV Shows, and Games**. There is
+  no global filter; instead **Explore, Collection, and List each have their own
+  category sub-nav**. Collection and List include an **All** option (mixed
+  types); Explore picks one type to discover. Selections persist per account.
+- **Theme** — Settings → Appearance offers **Light / Dark / Auto** (Auto follows
+  the device). The whole UI is tokenised, so it themes cleanly; the choice is a
+  device-level preference applied before sign-in (so the splash is themed too).
   - **Discovery is keyless** (no API keys needed): Books → Open Library,
     TV → TVmaze, Games → CheapShark (Steam art), Movies → iTunes best-effort.
   - Any collection can also be built by hand: the **Add** button opens a quick

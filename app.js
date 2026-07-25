@@ -2665,15 +2665,21 @@ document.addEventListener(
 const AUTH_USERS_KEY = 'dl-users';
 const AUTH_SESSION_KEY = 'dl-session';
 
-async function hashPassword(password) {
+/* A pure-JS hash that works in every context (including non-secure ones where
+   Safari disables Web Crypto). Deterministic everywhere, so an account made on
+   http://localhost can still sign in when the same device opens http://<ip>. */
+function simpleHash(password) {
+  let h = 0;
+  for (let i = 0; i < password.length; i++) h = (Math.imul(31, h) + password.charCodeAt(i)) | 0;
+  return `s${(h >>> 0).toString(16)}`;
+}
+/* SHA-256 when available (secure contexts), else the portable hash. */
+async function strongHash(password) {
   try {
     const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(password));
     return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
   } catch {
-    // Fallback for non-secure contexts — still just a placeholder.
-    let h = 0;
-    for (let i = 0; i < password.length; i++) h = (Math.imul(31, h) + password.charCodeAt(i)) | 0;
-    return `x${h}`;
+    return simpleHash(password);
   }
 }
 
@@ -2699,7 +2705,8 @@ const Auth = {
       id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       name,
       email,
-      passwordHash: await hashPassword(password),
+      passwordHash: await strongHash(password),
+      pwSimple: simpleHash(password), // portable check for cross-context sign-in
       createdAt: new Date().toISOString(),
     };
     users.push(user);
@@ -2711,9 +2718,12 @@ const Auth = {
   async signIn({ email, password }) {
     email = email.trim().toLowerCase();
     const user = this.all().find((u) => u.email === email);
-    if (!user || user.passwordHash !== (await hashPassword(password))) {
-      throw new Error('Wrong email or password.');
-    }
+    // Accept either the portable hash (works in any context) or the strong one.
+    const ok = user && (
+      (user.pwSimple && user.pwSimple === simpleHash(password)) ||
+      user.passwordHash === (await strongHash(password))
+    );
+    if (!ok) throw new Error('Wrong email or password.');
     this.setSession(user.id);
     return user;
   },
