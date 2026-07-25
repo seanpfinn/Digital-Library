@@ -2105,3 +2105,13 @@ body {
 
 /* Decorative discs follow the theme; magnifier lens keeps its own fill. */
 .empty-art svg circle:first-of-type, .error-art svg circle:first-of-type { fill: var(--disc); }
+
+/* ---------- Logo: white in dark mode ----------
+   The mark is a blue box with knockout letters; brightness(0) invert(1) turns
+   the blue silhouette white while the letter holes stay transparent. */
+:root[data-theme="dark"] .logo,
+:root[data-theme="dark"] .auth-logo { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .logo,
+  :root:not([data-theme="light"]) .auth-logo { filter: brightness(0) invert(1); }
+}
