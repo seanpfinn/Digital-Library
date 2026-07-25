@@ -241,23 +241,31 @@ const bookAuthorEl = document.getElementById('bookAuthor');
    keep serving a stale low-resolution copy. */
 const COVER_VERSION = '2';
 
-/* Neutral placeholder for items added without artwork. */
+/* Neutral placeholder for items added without artwork. Transparent background
+   so the cover element's themed surface shows through in light and dark. */
 function placeholderCover(book) {
   const icon = typeMeta(book && book.type).icon;
   const svg =
     `<svg xmlns='http://www.w3.org/2000/svg' width='300' height='444'>` +
-    `<rect width='300' height='444' fill='%23eceef4'/>` +
-    `<text x='150' y='236' font-size='96' text-anchor='middle'>${icon}</text></svg>`;
+    `<text x='150' y='236' font-size='96' text-anchor='middle' opacity='0.55'>${icon}</text></svg>`;
   return `data:image/svg+xml,${svg}`;
 }
 
 function coverSrc(book) {
-  const cover = book.cover || '';
+  const cover = book.cover || book.coverUrl || '';
   if (!cover) return placeholderCover(book);
   // Data URLs (captured photos) and remote URLs are used as-is; only the
   // bundled covers/ files get the cache-busting version query.
   if (cover.startsWith('data:') || /^https?:/.test(cover)) return cover;
   return `${cover}?v=${COVER_VERSION}`;
+}
+
+/* Set an image's cover, falling back to book.coverFallback (e.g. a game's
+   capsule art) if the primary source fails to load. */
+function setCover(img, book) {
+  img.src = coverSrc(book);
+  const fb = book.coverFallback;
+  if (fb) img.onerror = () => { img.onerror = null; img.src = fb; };
 }
 
 /* How many slots the shelf renders. Always a whole number of copies of the
@@ -328,17 +336,15 @@ function buildCoverflow() {
     el.className = 'book';
     el.dataset.slot = slot;
 
-    const src = coverSrc(book);
-
     const cover = document.createElement('img');
     cover.className = 'cover';
-    cover.src = src;
+    setCover(cover, book);
     cover.alt = book.title;
     cover.draggable = false;
 
     const reflection = document.createElement('img');
     reflection.className = 'reflection';
-    reflection.src = src;
+    setCover(reflection, book);
     reflection.alt = '';
     reflection.setAttribute('aria-hidden', 'true');
     reflection.draggable = false;
@@ -757,7 +763,7 @@ function openTray(book, { preview = false } = {}) {
   trayEl.classList.toggle('tray--preview', preview);
   resetRemoveButton();
   closeTrayListMenu();
-  trayCover.src = coverSrc(book);
+  setCover(trayCover, book);
   trayCover.alt = `${book.title} cover`;
   trayTitle.textContent = book.title;
   trayAuthor.textContent = book.author;
@@ -866,7 +872,7 @@ function renderBrowse() {
     item.style.animationDelay = `${Math.min(i * 40, 480)}ms`;
 
     const img = document.createElement('img');
-    img.src = coverSrc(book);
+    setCover(img, book);
     img.alt = book.title;
     img.loading = 'lazy';
 
@@ -1195,15 +1201,18 @@ async function cheapsharkSearchOne(query) {
     const data = await res.json();
     const g = (data || []).find((x) => x.thumb && x.external);
     if (!g) return null;
-    // Upgrade the small Steam capsule to the wider header image where possible.
-    const large = g.thumb.replace(/capsule_sm_120/, 'header');
+    // Steam's portrait "library" box art fits the cover flow far better than the
+    // landscape capsule; fall back to the capsule when there's no Steam app id.
+    const app = g.steamAppID;
+    const base = app ? `https://cdn.cloudflare.steamstatic.com/steam/apps/${app}` : null;
     return {
       type: 'game',
       key: `cheapshark:${g.gameID}`,
       title: g.external,
       author: '',
-      coverUrl: g.thumb,
-      coverLarge: large,
+      coverUrl: base ? `${base}/library_600x900.jpg` : g.thumb,
+      coverLarge: base ? `${base}/library_600x900_2x.jpg` : g.thumb,
+      coverFallback: g.thumb, // if the portrait art 404s
       synopsis: '',
     };
   } catch { return null; }
@@ -1303,6 +1312,7 @@ async function addExploreDoc(doc) {
     title: doc.title,
     author: doc.author || '',
     cover: doc.coverLarge || doc.coverUrl,
+    coverFallback: doc.coverFallback,
     custom: true,
     source: (doc.key.split(':')[0]) || 'web',
     synopsis: doc.synopsis || '',
@@ -1327,6 +1337,7 @@ function docToPreviewBook(doc) {
     title: doc.title,
     author: doc.author || '',
     cover: doc.coverLarge || doc.coverUrl,
+    coverFallback: doc.coverFallback,
     synopsis: doc.synopsis || '',
     olKey: doc.type === 'book' ? doc.key : undefined,
   };
@@ -1342,7 +1353,7 @@ function exploreCard(doc) {
   const item = elem('div', 'shelf-item explore-card');
 
   const img = elem('img');
-  img.src = doc.coverUrl;
+  setCover(img, doc);
   img.alt = doc.title;
   img.loading = 'lazy';
   const t = elem('h4');
@@ -1536,7 +1547,7 @@ function readBadge() {
 function shelfItem(book) {
   const item = elem('div', 'shelf-item');
   const img = elem('img');
-  img.src = coverSrc(book);
+  setCover(img, book);
   img.alt = book.title;
   img.loading = 'lazy';
   const t = elem('h4');

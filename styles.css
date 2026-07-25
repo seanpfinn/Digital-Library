@@ -8,7 +8,7 @@
      (header + gap) plus the title block below it; 0.886 undoes the 1.129x
      perspective magnification. The width cap keeps phones sane, and the height
      is derived back from it so the 0.677 cover ratio always holds. */
-  --cover-fit: clamp(260px, calc((100vh - 344px) * 0.886), 640px);
+  --cover-fit: clamp(260px, calc((100vh - 366px) * 0.886), 640px);
   --cover-w: min(calc(var(--cover-fit) * 0.677), calc(100vw * 0.58));
   --cover-h: calc(var(--cover-w) / 0.677);
   --side-scale: 0.8;
@@ -18,8 +18,10 @@
   /* Vertical rhythm: the same gap sits above the nav row and below it,
      so the header and the shelf are evenly spaced. */
   --shelf-gap: 76px;
-  /* Bottom of the nav row: 20px padding + 36px header row + gap + 39px nav row. */
-  --nav-bottom: calc(20px + 36px + var(--shelf-gap) + 39px);
+  /* True bottom of the fixed header: 20px top pad + 36px header row + gap +
+     36px nav row + 20px bottom pad. (The Collection sub-nav pins to this, so
+     it must be exact or the header would clip it.) */
+  --nav-bottom: calc(20px + 36px + var(--shelf-gap) + 36px + 20px);
   /* The centre cover is magnified about the shelf's perspective origin
      (50% 40%), so it renders this far above the container's top edge:
      0.4 x containerHeight x (scale - 1), where scale = 1400/(1400-160). */
@@ -383,7 +385,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-weight: 600;
   font-size: 15px;
-  color: #000;
+  color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -425,7 +427,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-weight: 600;
   font-size: 17px;
-  color: #000;
+  color: var(--text);
 }
 .list .browse-item p {
   margin-top: 2px;
@@ -546,7 +548,7 @@ body {
 .modal-tabs {
   display: flex;
   gap: 8px;
-  background: #f2f2f2;
+  background: var(--surface-2);
   border-radius: 12px;
   padding: 4px;
 }
@@ -562,7 +564,7 @@ body {
   color: var(--text-2);
   cursor: pointer;
 }
-.tab.active { background: var(--surface); color: #000; box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
+.tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 4px rgba(0,0,0,0.12); }
 
 .camera-wrap {
   position: relative;
@@ -624,8 +626,8 @@ body {
 }
 .btn.primary { background: #1d24e0; color: #fff; }
 .btn.primary:hover { background: #161cb8; }
-.btn.secondary { background: #f2f2f2; color: var(--text); }
-.btn.secondary:hover { background: #e6e6e6; }
+.btn.secondary { background: var(--surface-2); color: var(--text); }
+.btn.secondary:hover { background: var(--surface-3); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 
 .modal-status {
@@ -639,7 +641,7 @@ body {
 .confirm-card {
   display: flex;
   gap: 16px;
-  background: #f8f8f8;
+  background: var(--surface-2);
   border-radius: 14px;
   padding: 16px;
 }
@@ -789,7 +791,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-size: 15px;
   line-height: 1.55;
-  color: #3a3a40;
+  color: var(--text-2);
 }
 
 .tray-ctas { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
@@ -960,7 +962,7 @@ body {
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
-.candidate:hover { border-color: #004bec; background: #f7f9ff; }
+.candidate:hover { border-color: #004bec; background: var(--surface-3); }
 .candidate img {
   width: 40px;
   height: 60px;
@@ -995,7 +997,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-weight: 600;
   font-size: 13px;
-  color: #9a9aa2;
+  color: var(--text-dim);
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -1030,7 +1032,7 @@ body {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  border: 3px solid #e6e6ef;
+  border: 3px solid var(--border);
   border-top-color: #004bec;
   animation: spin 0.8s linear infinite;
 }
@@ -1247,7 +1249,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-size: 14px;
   line-height: 1.6;
-  color: #3a3a40;
+  color: var(--text-2);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -1401,7 +1403,7 @@ body {
   display: inline-flex;
   padding: 3px;
   border-radius: 11px;
-  background: #f2f2f5;
+  background: var(--surface-2);
 }
 .segmented button {
   padding: 6px 14px;
@@ -1560,7 +1562,7 @@ body {
   cursor: pointer;
   text-align: left;
 }
-.listmenu-item:hover { background: #f4f4f7; }
+.listmenu-item:hover { background: var(--surface-3); }
 .listmenu-check {
   width: 18px;
   height: 18px;
@@ -1679,7 +1681,7 @@ body {
   font-family: 'Figtree', sans-serif;
   font-weight: 600;
   font-size: 13px;
-  color: #9a9aa2;
+  color: var(--text-dim);
   cursor: pointer;
   transition: color 0.15s ease;
 }
@@ -1721,7 +1723,7 @@ body {
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.explore-add:hover { background: #f0f4ff; }
+.explore-add:hover { background: var(--surface-3); }
 .explore-add.owned {
   color: var(--text-dim);
   background: var(--surface-3);
@@ -2085,7 +2087,7 @@ body {
 /* ---------- Collection category sub-nav (floats over the shelf) ---------- */
 .collection-subnav {
   position: fixed;
-  top: var(--nav-bottom);
+  top: calc(var(--nav-bottom) + 8px); /* just clear of the header's real bottom */
   left: 50%;
   transform: translateX(-50%);
   z-index: 30;
