@@ -40,7 +40,8 @@ Then open <http://localhost:8734>.
   the device). The whole UI is tokenised, so it themes cleanly; the choice is a
   device-level preference applied before sign-in (so the splash is themed too).
   - **Discovery is keyless** (no API keys needed): Books → Open Library,
-    TV → TVmaze, Games → CheapShark (Steam art), Movies → iTunes best-effort.
+    TV → TVmaze, Games → CheapShark (portrait Steam box art, capsule fallback),
+    Movies → iTunes best-effort.
   - Any collection can also be built by hand: the **Add** button opens a quick
     manual form (title, creator, cover URL) for non-book types, while Books keep
     the full scan/photo/ISBN flow.
