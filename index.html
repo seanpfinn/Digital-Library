@@ -41,14 +41,6 @@
 
     <div class="nav-row">
      <div class="nav-left">
-      <div class="type-switch">
-        <button class="type-btn glass" id="typeBtn" aria-haspopup="menu" aria-expanded="false">
-          <span class="type-icon" id="typeIcon">📚</span>
-          <span id="typeLabel">Books</span>
-          <img class="type-caret" src="assets/caret-down.svg" alt="" />
-        </button>
-        <div class="type-menu glass glass--static" id="typeMenu" role="menu" hidden></div>
-      </div>
       <nav class="tabs" id="tabsNav">
         <button class="tab-link" data-tab="explore" data-label="Explore">
           Explore<img class="tab-caret" src="assets/caret-down.svg" alt="" />
@@ -83,6 +75,9 @@
       </div>
     </div>
   </header>
+
+  <!-- Collection category sub-nav (floats below the header, over the shelf) -->
+  <div class="collection-subnav" id="collectionSubnav" role="tablist" aria-label="Collection categories" hidden></div>
 
   <p class="empty-shelf" id="emptyShelf" hidden>
     Your library is empty. Use <strong>Add book</strong> to put something on the shelf.
@@ -141,6 +136,7 @@
 
   <!-- List tab -->
   <section class="tab-page" id="listPage" hidden>
+    <div class="explore-subnav" id="listSubnav" role="tablist" aria-label="List categories"></div>
     <div class="page-inner" id="listInner"></div>
   </section>
 

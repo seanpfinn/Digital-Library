@@ -87,14 +87,32 @@ const ITEM_TYPES = [
 ];
 DEFAULT_BOOKS.forEach((b) => { b.type = 'book'; });
 
-/* The collection type currently on screen. All views filter to it. */
-let currentType = 'book';
+/* Each surface picks its own category — there is no global filter.
+   Explore needs a concrete type; Collection and List add an "All" option. */
+let exploreType = 'book';               // book | movie | tv | game
+let libType = 'all';                    // all | book | movie | tv | game (Collection + List)
+const ALL_OPTS = [{ key: 'all', label: 'All', one: 'item', icon: '' }, ...ITEM_TYPES];
+
 function typeMeta(key) {
-  return ITEM_TYPES.find((t) => t.key === (key || currentType)) || ITEM_TYPES[0];
+  return ITEM_TYPES.find((t) => t.key === key) ||
+    ALL_OPTS.find((t) => t.key === key) || ITEM_TYPES[0];
 }
-/* The items belonging to the active collection type. */
+
+/* Items shown in the Collection (and counted in List) for the active filter. */
 function collectionItems() {
-  return books.filter((b) => (b.type || 'book') === currentType);
+  if (libType === 'all') return books.slice();
+  return books.filter((b) => (b.type || 'book') === libType);
+}
+function typeCount(key) {
+  return key === 'all' ? books.length : books.filter((b) => (b.type || 'book') === key).length;
+}
+
+/* The type a manually-added item gets, and the type the header chrome reflects,
+   based on where you are. */
+function addType() {
+  if (typeof currentTab !== 'undefined' && currentTab === 'explore') return exploreType;
+  if (libType !== 'all') return libType;
+  return 'book';
 }
 
 function loadJSON(key, fallback) {
@@ -586,15 +604,14 @@ function updateEmptyState() {
   browseEl.hidden = empty || currentView === 'cover';
 }
 
-/* Empty-collection message tailored to the active type. */
+/* Empty-collection message tailored to the active filter. */
 function emptyCollectionHTML() {
-  const m = typeMeta();
-  return `Your ${m.label.toLowerCase()} collection is empty. ` +
-    `Use <strong>Explore</strong> or <strong>${addLabel()}</strong> to add ${m.label.toLowerCase()}.`;
+  const what = libType === 'all' ? 'library' : `${typeMeta(libType).label.toLowerCase()} collection`;
+  return `Your ${what} is empty. ` +
+    `Use <strong>Explore</strong> or <strong>${addLabel()}</strong> to add ${libType === 'all' ? 'something' : typeMeta(libType).label.toLowerCase()}.`;
 }
 function addLabel() {
-  const m = typeMeta();
-  return `Add ${m.one}`;
+  return `Add ${typeMeta(addType()).one}`;
 }
 
 function resetRemoveButton() {
@@ -637,7 +654,7 @@ trayAddPreview.addEventListener('click', async () => {
     synopsis: trayBook.synopsis || '',
   };
   const added = await addExploreDoc(doc);
-  if (currentTab === 'explore' && exploreCache[currentType]) renderExploreContent(exploreCache[currentType]);
+  if (currentTab === 'explore' && exploreCache[exploreType]) renderExploreContent(exploreCache[exploreType]);
   openTray(added); // reopen as a full library entry
 });
 const trayListBtn = document.getElementById('trayListBtn');
@@ -931,6 +948,7 @@ const explorePage = document.getElementById('explorePage');
 const listPage = document.getElementById('listPage');
 const settingsPage = document.getElementById('settingsPage');
 const profilePage = document.getElementById('profilePage');
+const collectionSubnav = document.getElementById('collectionSubnav');
 let currentTab = 'collection';
 
 function setActiveTab(tab) {
@@ -953,10 +971,13 @@ function applyTab() {
   listPage.hidden = currentTab !== 'list';
   settingsPage.hidden = currentTab !== 'settings';
   profilePage.hidden = currentTab !== 'profile';
+  collectionSubnav.hidden = !isCollection;
   avatarBtn.classList.toggle('active', currentTab === 'profile');
+  reflectChrome();
   closeTray();
 
   if (isCollection) {
+    renderSubnav(collectionSubnav, ALL_OPTS, libType, setLibType);
     updateEmptyState();
     if (collectionItems().length) {
       if (currentView === 'cover') replayShelf();
@@ -1387,13 +1408,13 @@ function renderExploreContent(data) {
 
     const body = elem('div', 'explore-hero-body');
     const eyebrow = elem('p', 'explore-eyebrow');
-    eyebrow.textContent = currentType === 'book' ? 'Trending now' : 'Featured';
+    eyebrow.textContent = exploreType === 'book' ? 'Trending now' : 'Featured';
     const ht = elem('h3', 'explore-hero-title');
     ht.textContent = hero.title;
     const ha = elem('p', 'explore-hero-author');
     ha.textContent = hero.author;
     const hs = elem('p', 'explore-hero-synopsis');
-    hs.textContent = data.heroDesc || `A ${typeMeta().one} worth discovering.`;
+    hs.textContent = data.heroDesc || `A ${typeMeta(exploreType).one} worth discovering.`;
     const hb = elem('button', `explore-hero-btn${owned ? ' owned' : ''}`);
     hb.textContent = owned ? '✓ In library' : '+ Add to collection';
     const setHeroState = (isOwned) => {
@@ -1443,29 +1464,30 @@ function exploreMessage(html) {
   return box;
 }
 
-/* The category tabs at the top of the Explore page. */
-function renderExploreSubnav() {
-  const nav = document.getElementById('exploreSubnav');
-  nav.innerHTML = '';
-  ITEM_TYPES.forEach((t) => {
-    const on = t.key === currentType;
+/* Shared category sub-nav renderer used by Explore, Collection and List. */
+function renderSubnav(container, opts, active, onSelect) {
+  if (!container) return;
+  container.innerHTML = '';
+  opts.forEach((t) => {
+    const on = t.key === active;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = `subnav-pill${on ? ' active' : ''}`;
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(on));
-    const n = books.filter((x) => (x.type || 'book') === t.key).length;
+    const n = typeCount(t.key);
     b.innerHTML =
-      `<span class="subnav-icon">${t.icon}</span><span>${t.label}</span>` +
+      (t.icon ? `<span class="subnav-icon">${t.icon}</span>` : '') +
+      `<span>${t.label}</span>` +
       (n ? `<span class="subnav-count">${n}</span>` : '');
-    b.addEventListener('click', () => { if (t.key !== currentType) setType(t.key); });
-    nav.appendChild(b);
+    b.addEventListener('click', () => { if (t.key !== active) onSelect(t.key); });
+    container.appendChild(b);
   });
 }
 
 async function renderExplore() {
-  renderExploreSubnav();
-  const type = currentType;
+  renderSubnav(document.getElementById('exploreSubnav'), ITEM_TYPES, exploreType, setExploreType);
+  const type = exploreType;
   // Re-render from cache instantly (owned state is recomputed each time).
   if (exploreCache[type]) { renderExploreContent(exploreCache[type]); return; }
 
@@ -1476,7 +1498,7 @@ async function renderExplore() {
 
   try {
     const data = await loadExplore(type);
-    if (token !== exploreToken || currentTab !== 'explore' || currentType !== type) return;
+    if (token !== exploreToken || currentTab !== 'explore' || exploreType !== type) return;
     if (!data.hero && !data.shelves.length) {
       const box = exploreMessage(
         `<h2>No ${m.label.toLowerCase()} to show</h2>` +
@@ -1492,7 +1514,7 @@ async function renderExplore() {
     renderExploreContent(data);
   } catch (err) {
     console.warn('Explore load failed:', err);
-    if (token !== exploreToken || currentTab !== 'explore' || currentType !== type) return;
+    if (token !== exploreToken || currentTab !== 'explore' || exploreType !== type) return;
     const box = exploreMessage(
       `<h2>Couldn't reach ${DISCOVERY[type].source}</h2><p>Check your connection and try again.</p>`
     );
@@ -1551,8 +1573,9 @@ function listSection(list) {
   const left = elem('div', 'list-section-headleft');
   const title = elem('h2', 'list-section-title');
   title.textContent = list.name;
+  const shown = listItems(list);
   const count = elem('span', 'list-section-count');
-  count.textContent = `${list.bookIds.length} book${list.bookIds.length === 1 ? '' : 's'}`;
+  count.textContent = `${shown.length} item${shown.length === 1 ? '' : 's'}`;
   left.append(title, count);
 
   const del = elem('button', 'list-del-btn');
@@ -1571,17 +1594,24 @@ function listSection(list) {
   head.append(left, del);
   section.appendChild(head);
 
-  const items = list.bookIds.map(bookById).filter(Boolean);
-  if (!items.length) {
+  if (!shown.length) {
     const hint = elem('p', 'list-empty-hint');
-    hint.textContent = 'No books yet — open any book and choose “Add to list”.';
+    hint.textContent = libType === 'all'
+      ? 'No items yet — open anything and choose “Add to list”.'
+      : `No ${typeMeta(libType).label.toLowerCase()} in this list.`;
     section.appendChild(hint);
   } else {
     const scroll = elem('div', 'shelf-scroll');
-    items.forEach((b) => scroll.appendChild(shelfItem(b)));
+    shown.forEach((b) => scroll.appendChild(shelfItem(b)));
     section.appendChild(scroll);
   }
   return section;
+}
+
+/* A list's items, filtered by the List page's category selection. */
+function listItems(list) {
+  const all = list.bookIds.map(bookById).filter(Boolean);
+  return libType === 'all' ? all : all.filter((b) => (b.type || 'book') === libType);
 }
 
 function startNewList() {
@@ -1624,6 +1654,7 @@ function startNewList() {
 function renderLists() {
   const inner = document.getElementById('listInner');
   inner.innerHTML = '';
+  renderSubnav(document.getElementById('listSubnav'), ALL_OPTS, libType, setLibType);
 
   const head = elem('div', 'lists-head');
   const h = elem('h1', 'lists-title');
@@ -1656,7 +1687,16 @@ function renderLists() {
     return;
   }
 
-  lists.forEach((list) => inner.appendChild(listSection(list)));
+  // When filtering by a type, hide lists that have nothing of that type.
+  const visible = libType === 'all' ? lists : lists.filter((l) => listItems(l).length);
+  if (!visible.length) {
+    const none = elem('p', 'list-empty-hint');
+    none.style.marginTop = '8px';
+    none.textContent = `None of your lists contain ${typeMeta(libType).label.toLowerCase()} yet.`;
+    inner.appendChild(none);
+    return;
+  }
+  visible.forEach((list) => inner.appendChild(listSection(list)));
 }
 
 /* ---------- Settings ---------- */
@@ -1785,6 +1825,17 @@ function renderSettings() {
   const inner = document.getElementById('settingsInner');
   inner.innerHTML = '';
 
+  // Appearance
+  inner.appendChild(
+    settingsGroup('Appearance', [
+      settingsRow(
+        'Theme',
+        'Light, dark, or match your device.',
+        settingsSegmented(['light', 'dark', 'auto'], currentTheme(), (v) => setTheme(v))
+      ),
+    ])
+  );
+
   // Reading experience
   inner.appendChild(
     settingsGroup('Reading experience', [
@@ -1852,46 +1903,31 @@ function renderSettings() {
   inner.appendChild(about);
 }
 
-/* ============================== Collection-type switcher ============================== */
+/* ============================== Category selection ============================== */
 
-const typeBtn = document.getElementById('typeBtn');
-const typeMenu = document.getElementById('typeMenu');
-const typeLabel = document.getElementById('typeLabel');
-const typeIcon = document.getElementById('typeIcon');
-
-/* Reflect the active type in the header chrome. */
-function reflectType() {
-  const m = typeMeta();
-  typeLabel.textContent = m.label;
-  typeIcon.textContent = m.icon;
-  searchInput.placeholder = m.search;
-  searchInput.setAttribute('aria-label', m.search);
+/* Keep the header's Add button + search hint in step with where you are. */
+function reflectChrome() {
   addBtn.textContent = addLabel();
+  const holder = libType === 'all' ? 'Search your library' : typeMeta(libType).search;
+  searchInput.placeholder = holder;
+  searchInput.setAttribute('aria-label', holder);
 }
 
-function renderTypeMenu() {
-  typeMenu.innerHTML = '';
-  ITEM_TYPES.forEach((t) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = `type-item${t.key === currentType ? ' current' : ''}`;
-    const n = books.filter((x) => (x.type || 'book') === t.key).length;
-    b.innerHTML = `<span class="type-item-icon">${t.icon}</span><span class="type-item-name">${t.label}</span><span class="type-item-count">${n || ''}</span>`;
-    b.addEventListener('click', (e) => { e.stopPropagation(); closeTypeMenu(); setType(t.key); });
-    typeMenu.appendChild(b);
-  });
+/* Explore category (one concrete type). */
+function setExploreType(key) {
+  if (key === exploreType) return;
+  exploreType = key;
+  settings.exploreType = key;
+  saveSettings();
+  reflectChrome();
+  renderExplore();
 }
-function openTypeMenu() { renderTypeMenu(); typeMenu.hidden = false; typeBtn.setAttribute('aria-expanded', 'true'); }
-function closeTypeMenu() { typeMenu.hidden = true; typeBtn.setAttribute('aria-expanded', 'false'); }
-typeBtn.addEventListener('click', (e) => { e.stopPropagation(); if (typeMenu.hidden) openTypeMenu(); else closeTypeMenu(); });
-document.addEventListener('click', (e) => {
-  if (!typeMenu.hidden && !typeMenu.contains(e.target) && !typeBtn.contains(e.target)) closeTypeMenu();
-});
 
-function setType(key) {
-  if (key === currentType) return;
-  currentType = key;
-  settings.currentType = key;
+/* Collection + List category (shared library filter, may be "all"). */
+function setLibType(key) {
+  if (key === libType) return;
+  libType = key;
+  settings.libType = key;
   saveSettings();
   slotCursor = 0;
   currentView = 'cover';
@@ -1900,9 +1936,9 @@ function setType(key) {
     b.classList.toggle('active', on);
     b.setAttribute('aria-pressed', String(on));
   });
-  reflectType();
+  reflectChrome();
   buildCoverflow();
-  applyTab(); // re-render whichever tab is showing, for the new type
+  applyTab(); // re-render the active library view (Collection or List)
 }
 
 /* ============================== Generic manual add ============================== */
@@ -1944,7 +1980,7 @@ manualAddBtn.addEventListener('click', () => {
   }
   const item = {
     id: `custom-${Date.now()}`,
-    type: currentType,
+    type: addType(),
     title,
     author: manualCreatorInput.value.trim(),
     cover: manualCoverInput.value.trim(),
@@ -2057,7 +2093,7 @@ function closeModal() {
 
 /* Books get the full scan/photo/ISBN modal; other types get a quick manual add. */
 function openAddFlow() {
-  if (currentType === 'book') openModal();
+  if (addType() === 'book') openModal();
   else openManualModal();
 }
 addBtn.addEventListener('click', openAddFlow);
@@ -2875,10 +2911,10 @@ function startApp(user) {
 
   // Reset view state, then build the shelf before anything tries to render it.
   currentView = 'cover';
-  currentType = settings.currentType && ITEM_TYPES.some((t) => t.key === settings.currentType)
-    ? settings.currentType : 'book';
+  exploreType = ITEM_TYPES.some((t) => t.key === settings.exploreType) ? settings.exploreType : 'book';
+  libType = ALL_OPTS.some((t) => t.key === settings.libType) ? settings.libType : 'all';
   exploreCache = {}; // discovery cache is per-account
-  reflectType();
+  reflectChrome();
   buildCoverflow();
   setActiveTab('collection');
   if (settings.defaultView && settings.defaultView !== 'cover') setView(settings.defaultView);
@@ -2886,7 +2922,24 @@ function startApp(user) {
   splash.hidden = true;
 }
 
+/* ---------------- Theme (device-level, applies before sign-in) ---------------- */
+const THEME_KEY = 'dl-theme';
+function currentTheme() {
+  const t = loadJSON(THEME_KEY, 'auto');
+  return ['light', 'dark', 'auto'].includes(t) ? t : 'auto';
+}
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'light' || mode === 'dark') root.dataset.theme = mode;
+  else delete root.dataset.theme; // auto → follow the system
+}
+function setTheme(mode) {
+  saveJSON(THEME_KEY, mode);
+  applyTheme(mode);
+}
+
 (function boot() {
+  applyTheme(currentTheme());
   const user = Auth.current();
   if (user) startApp(user);
   else showSplash();
