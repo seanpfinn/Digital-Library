@@ -81,9 +81,9 @@ const DEFAULT_BOOKS = [
    types (movie, tv, game) alongside these once those collections are built. */
 const ITEM_TYPES = [
   { key: 'book', label: 'Books', one: 'book', creator: 'Author', icon: '📚', search: 'Search by author, book, or genre' },
+  { key: 'game', label: 'Games', one: 'game', creator: 'Studio', icon: '🎮', search: 'Search games' },
   { key: 'movie', label: 'Movies', one: 'movie', creator: 'Director', icon: '🎬', search: 'Search movies' },
   { key: 'tv', label: 'TV Shows', one: 'show', creator: 'Network', icon: '📺', search: 'Search TV shows' },
-  { key: 'game', label: 'Games', one: 'game', creator: 'Studio', icon: '🎮', search: 'Search games' },
 ];
 DEFAULT_BOOKS.forEach((b) => { b.type = 'book'; });
 
@@ -1503,14 +1503,10 @@ function renderSubnav(container, opts, active, onSelect) {
     const on = t.key === active;
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `subnav-pill${on ? ' active' : ''}`;
+    b.className = `subnav-link${on ? ' active' : ''}`;
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(on));
-    const n = typeCount(t.key);
-    b.innerHTML =
-      (t.icon ? `<span class="subnav-icon">${t.icon}</span>` : '') +
-      `<span>${t.label}</span>` +
-      (n ? `<span class="subnav-count">${n}</span>` : '');
+    b.textContent = t.label;
     b.addEventListener('click', () => { if (t.key !== active) onSelect(t.key); });
     container.appendChild(b);
   });
