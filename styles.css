@@ -9,8 +9,8 @@
      perspective magnification. The width cap keeps phones sane, and the height
      is derived back from it so the 0.677 cover ratio always holds. */
   --cover-fit: clamp(260px, calc((100vh - 366px) * 0.886), 640px);
-  --cover-w: min(calc(var(--cover-fit) * 0.677), calc(100vw * 0.58));
-  --cover-h: calc(var(--cover-w) / 0.677);
+  --cover-w: min(calc(var(--cover-fit) * 0.6667), calc(100vw * 0.58));
+  --cover-h: calc(var(--cover-w) / 0.6667);
   --side-scale: 0.8;
   --title-color: var(--text);
   --author-color: var(--text-dim);
@@ -764,7 +764,7 @@ body {
 .tray-cover {
   width: 132px;
   flex-shrink: 0;
-  aspect-ratio: 0.677;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   border-radius: 5px;
   background: var(--surface-2);
@@ -1067,7 +1067,7 @@ body {
 }
 .match-cover {
   width: 150px;
-  aspect-ratio: 0.66;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   border-radius: 6px;
   background: var(--surface-2);
@@ -1212,7 +1212,7 @@ body {
 .explore-hero-cover {
   width: 150px;
   flex-shrink: 0;
-  aspect-ratio: 0.66;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   border-radius: 6px;
   background: var(--surface-2);
@@ -1305,7 +1305,7 @@ body {
 }
 .shelf-item img {
   width: 118px;
-  aspect-ratio: 0.66;
+  aspect-ratio: 2 / 3;
   object-fit: cover;
   border-radius: 5px;
   background: var(--surface-2);
