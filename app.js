@@ -1503,10 +1503,14 @@ function renderSubnav(container, opts, active, onSelect) {
     const on = t.key === active;
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `subnav-link${on ? ' active' : ''}`;
+    b.className = `subnav-pill${on ? ' active' : ''}`;
     b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', String(on));
-    b.textContent = t.label;
+    const n = typeCount(t.key);
+    b.innerHTML =
+      (t.icon ? `<span class="subnav-icon">${t.icon}</span>` : '') +
+      `<span>${t.label}</span>` +
+      (n ? `<span class="subnav-count">${n}</span>` : '');
     b.addEventListener('click', () => { if (t.key !== active) onSelect(t.key); });
     container.appendChild(b);
   });
