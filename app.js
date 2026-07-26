@@ -252,7 +252,7 @@ function placeholderCover(book) {
 }
 
 function coverSrc(book) {
-  const cover = book.cover || book.coverUrl || '';
+  const cover = gameCoverOverride(book) || book.cover || book.coverUrl || '';
   if (!cover) return placeholderCover(book);
   // Data URLs (captured photos) and remote URLs are used as-is; only the
   // bundled covers/ files get the cache-busting version query.
@@ -1242,6 +1242,26 @@ const TV_THEMES = [
   { title: 'Sci-fi & fantasy', seeds: ['Severance', 'Stranger Things', 'The Expanse', 'Black Mirror', 'Game of Thrones'] },
   { title: 'Comedy', seeds: ['Ted Lasso', 'The Office', 'Fleabag', 'Parks and Recreation', 'Arrested Development'] },
 ];
+/* CheapShark only knows PC-store listings, so console exclusives (Nintendo,
+   PlayStation) come back with a landscape store thumb and no Steam portrait
+   art. For those, fall back to a curated portrait cover keyed on the title. */
+const GAME_COVER_OVERRIDES = {
+  'the legend of zelda breath of the wild': 'https://upload.wikimedia.org/wikipedia/en/c/c6/The_Legend_of_Zelda_Breath_of_the_Wild.jpg',
+  'super mario odyssey': 'https://upload.wikimedia.org/wikipedia/en/8/8d/Super_Mario_Odyssey.jpg',
+  'animal crossing new horizons': 'https://upload.wikimedia.org/wikipedia/en/1/1f/Animal_Crossing_New_Horizons.jpg',
+  'bloodborne': 'https://upload.wikimedia.org/wikipedia/en/6/68/Bloodborne_Cover_Wallpaper.jpg',
+};
+
+function gameCoverKey(title) {
+  return (title || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+/* A curated portrait cover for a game whose catalogue art is landscape-only. */
+function gameCoverOverride(book) {
+  if (!book || book.type !== 'game') return '';
+  return GAME_COVER_OVERRIDES[gameCoverKey(book.title)] || '';
+}
+
 const GAME_THEMES = [
   { title: 'Modern classics', seeds: ['The Legend of Zelda Breath of the Wild', 'Elden Ring', 'God of War', 'Red Dead Redemption 2', 'Hades'] },
   { title: 'Indie gems', seeds: ['Hollow Knight', 'Celeste', 'Stardew Valley', 'Disco Elysium', 'Outer Wilds'] },
