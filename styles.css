@@ -2042,12 +2042,10 @@ body {
   .type-btn { padding: 0 10px; }
 }
 
-/* ---------- Category sub-nav ----------
-   Plain text links that echo the main nav (monospace, blue underline on the
-   active item), a size down from the primary tabs. */
+/* ---------- Category sub-nav (pills — one consistent style everywhere) ---------- */
 .explore-subnav {
   display: flex;
-  gap: 24px;
+  gap: 8px;
   width: 100%;
   max-width: 1120px;
   margin: 0 auto 26px;
@@ -2056,22 +2054,35 @@ body {
   -ms-overflow-style: none;
 }
 .explore-subnav::-webkit-scrollbar { display: none; }
-.subnav-link {
+.subnav-pill {
   flex: 0 0 auto;
-  padding: 0 0 4px;
-  border: none;
-  border-bottom: 3px solid transparent;
-  background: none;
-  font-family: 'Geist Mono', monospace;
-  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 29px;
+  background: var(--surface);
+  font-family: 'Figtree', sans-serif;
+  font-weight: 600;
   font-size: 14px;
-  color: var(--text-dim);
+  color: var(--text-2);
   cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.subnav-link:hover { color: var(--text-2); }
-.subnav-link.active { color: var(--text); border-bottom-color: #004bec; }
+.subnav-pill:hover { background: var(--surface-3); }
+.subnav-pill.active { background: #004bec; border-color: #004bec; color: #fff; }
+.subnav-icon { font-size: 15px; line-height: 1; }
+.subnav-count {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.7;
+  min-width: 14px;
+  text-align: center;
+}
+.subnav-pill.active .subnav-count { opacity: 0.85; }
 
 /* ---------- Collection category sub-nav (floats over the shelf) ---------- */
 .collection-subnav {
@@ -2080,7 +2091,7 @@ body {
   left: max(20px, calc(50% - 560px));  /* align to the 1120px header container */
   z-index: 30;
   display: flex;
-  gap: 24px;
+  gap: 8px;
   width: max-content;
   max-width: calc(100vw - 40px);
   overflow-x: auto;
