@@ -1310,6 +1310,36 @@ body {
   color: var(--text-dim);
 }
 
+/* Explore card titles stay on one line, truncated with an ellipsis; long ones
+   scroll like a ticker on hover to reveal the full title (see measureTitleTicker). */
+.explore-card .card-title {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  -webkit-line-clamp: none;
+}
+.explore-card .card-title-text {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  will-change: transform;
+}
+.explore-card:hover .card-title.is-clip .card-title-text {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  animation: title-ticker var(--ticker-dur, 4s) ease-in-out infinite alternate;
+}
+@keyframes title-ticker {
+  0%, 12%   { transform: translateX(0); }
+  88%, 100% { transform: translateX(var(--ticker-shift, 0)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .explore-card:hover .card-title.is-clip .card-title-text { animation: none; }
+}
+
 /* ============================== Settings ============================== */
 .settings-group { margin-bottom: 30px; animation: rise-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 .settings-group > h2 {
@@ -2086,4 +2116,11 @@ body {
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .logo,
   :root:not([data-theme="light"]) .auth-logo { filter: brightness(0) invert(1); }
+}
+
+/* View-toggle icons: the SVGs are dark by default; whiten them in dark mode
+   (both the active/filled and inactive/outline states). */
+:root[data-theme="dark"] .view-cta img { filter: brightness(0) invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .view-cta img { filter: brightness(0) invert(1); }
 }

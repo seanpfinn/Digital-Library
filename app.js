@@ -1376,8 +1376,11 @@ function exploreCard(doc) {
   setCover(img, doc);
   img.alt = doc.title;
   img.loading = 'lazy';
-  const t = elem('h4');
-  t.textContent = doc.title;
+  const t = elem('h4', 'card-title');
+  const tText = elem('span', 'card-title-text');
+  tText.textContent = doc.title;
+  t.title = doc.title; // native tooltip fallback
+  t.appendChild(tText);
   const s = elem('span');
   s.textContent = doc.author;
 
@@ -1410,7 +1413,21 @@ function exploreCard(doc) {
   t.addEventListener('click', showInfo);
 
   item.append(img, t, s, btn);
+  // Once laid out, mark titles that overflow one line so they ticker on hover.
+  requestAnimationFrame(() => measureTitleTicker(t, tText));
   return item;
+}
+
+/* If the title is wider than one line, tag it for the hover ticker and set the
+   scroll distance/duration so the animation reveals exactly the clipped part. */
+function measureTitleTicker(container, textEl) {
+  const overflow = textEl.scrollWidth - container.clientWidth;
+  if (overflow <= 1) { container.classList.remove('is-clip'); return; }
+  container.classList.add('is-clip');
+  container.style.setProperty('--ticker-shift', `-${overflow}px`);
+  // Hold at each end, and keep a roughly constant scroll speed (~45px/s).
+  const travel = Math.max(1.4, overflow / 45);
+  container.style.setProperty('--ticker-dur', `${(travel + 1.2).toFixed(2)}s`);
 }
 
 function exploreShelf(title, docs) {
